@@ -1,0 +1,11 @@
+scenario,phase,latency_avg_ms,latency_min_ms,latency_max_ms,throughput_msg_s,influxdb_available,nodered_available,grafana_available,temp_anomalies,humidity_anomalies,power_anomalies,temp_integrity
+scenario_1,baseline,1.16,0.58,2.18,1.07,True,True,True,0,0,0,OK
+scenario_1,during_attack,0.88,0.28,1.37,1.13,True,True,True,0,0,0,OK
+scenario_2,baseline,1.0,0.57,1.25,1.0,True,True,True,0,0,0,OK
+scenario_2,during_attack,0.73,0.27,1.1,1.27,True,True,True,0,0,0,OK
+scenario_3,baseline,1.07,0.31,1.96,1.0,True,True,True,0,0,0,OK
+scenario_3,during_attack,0.37,0.14,2.96,1.0,True,True,True,0,0,0,OK
+scenario_4,baseline,0.16,0.08,0.35,1.0,True,True,True,0,0,0,OK
+scenario_4,during_attack,0.79,0.23,1.3,1.07,True,True,True,0,0,0,OK
+scenario_5,baseline,0.95,0.22,1.48,1.13,True,True,True,0,0,0,OK
+scenario_5,during_attack,0.94,0.3,1.73,1.0,True,True,True,0,0,0,OK

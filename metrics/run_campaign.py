@@ -341,7 +341,7 @@ def check_data_integrity(env_config: dict) -> dict:
     for name, (measurement, field, max_val, min_val) in checks.items():
         query = f'''
 from(bucket: "{env_config['influxdb_bucket']}")
-  |> range(start: -10m)
+  |> range(start: -1h)
   |> filter(fn: (r) => r._measurement == "{measurement}")
   |> filter(fn: (r) => r._field == "{field}")
 '''
@@ -357,11 +357,25 @@ from(bucket: "{env_config['influxdb_bucket']}")
             record_count = max(0, len(lines) - 1)
             anomalies = 0
 
-            for line in lines[1:]:
+            # Parse InfluxDB CSV: find _value column index from header
+            value_col = 6  # default position
+            for line in lines:
+                if line.startswith(',result') or '_value' in line:
+                    headers = line.split(',')
+                    for i, h in enumerate(headers):
+                        if h.strip() == '_value':
+                            value_col = i
+                            break
+                    break
+
+            for line in lines:
+                # Skip metadata and header lines
+                if line.startswith('#') or '_value' in line or line.startswith(',result'):
+                    continue
                 parts = line.split(',')
-                if parts:
+                if len(parts) > value_col:
                     try:
-                        value = float(parts[-1].strip())
+                        value = float(parts[value_col].strip())
                         if value > max_val or value < min_val:
                             anomalies += 1
                     except ValueError:
@@ -607,15 +621,22 @@ def main():
         )
         attack_thread.start()
 
-        # Wait for attack to ramp up then collect metrics
-        time.sleep(5)
-        scenario_results["during_attack"] = collect_snapshot(
-            env_config, "during_attack"
-        )
-
-        # Wait for attack to complete
-        attack_thread.join()
-        log(f"[+] Scenario {scenario_num} complete")
+        # Scenario 2 (injection): wait for attack to complete before measuring
+        # so forged data is already in InfluxDB when we check integrity
+        # All other scenarios: measure during attack
+        if scenario_num == 2:
+            attack_thread.join()
+            log(f"[+] Scenario {scenario_num} complete")
+            scenario_results["during_attack"] = collect_snapshot(
+                env_config, "during_attack"
+            )
+        else:
+            time.sleep(5)
+            scenario_results["during_attack"] = collect_snapshot(
+                env_config, "during_attack"
+            )
+            attack_thread.join()
+            log(f"[+] Scenario {scenario_num} complete")
 
         campaign_results["scenarios"][scenario_key] = scenario_results
 
