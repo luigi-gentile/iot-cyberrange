@@ -170,3 +170,33 @@ services:
       iot_flat:
         ipv4_address: 172.20.0.32
     restart: unless-stopped
+  # ────────────────────────────────────────────
+  # Attacker Container - IoT Attack Toolkit
+  # Contains all tools and scripts to demonstrate
+  # the five attack scenarios against the insecure
+  # IoT infrastructure.
+  # ────────────────────────────────────────────
+  attacker:
+    build:
+      context: ./attacker
+      dockerfile: Dockerfile
+    container_name: insecure_attacker
+    environment:
+      - BROKER_HOST=172.20.0.20
+      - BROKER_PORT=1883
+      - NODERED_HOST=172.20.0.31
+      - INFLUXDB_HOST=172.20.0.30
+      - GRAFANA_HOST=172.20.0.32
+      - SUBNET=172.20.0.0/24
+    depends_on:
+      - broker
+      - influxdb
+      - nodered
+      - grafana
+    networks:
+      iot_flat:
+        ipv4_address: 172.20.0.99
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
