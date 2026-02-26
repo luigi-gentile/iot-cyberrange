@@ -112,7 +112,7 @@ def try_credentials(username: str, password: str, attempt_num: int) -> dict:
         "password":  password,
         "success":   False,
         "latency_ms": -1,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(datetime.timezone.utc).isoformat()
     }
 
     try:
@@ -234,7 +234,7 @@ def save_results(dictionary_results: list, reuse_results: list, output_file: str
         "attack":    "bruteforce",
         "scenario":  4,
         "broker":    f"{BROKER_HOST}:{BROKER_PORT}",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(datetime.timezone.utc).isoformat(),
         "dictionary_attack": {
             "total_attempts":   len(DEFAULT_CREDENTIALS),
             "successful":       len(dictionary_results),

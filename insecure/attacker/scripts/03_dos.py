@@ -118,7 +118,7 @@ def connection_flood_worker(worker_id: int):
             payload = json.dumps({
                 "attacker": f"dos_worker_{worker_id}",
                 "sequence": i,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(datetime.timezone.utc).isoformat()
             })
             result = client.publish(FLOOD_TOPIC, payload, qos=0)
             with metrics["lock"]:
@@ -202,7 +202,7 @@ def run_publish_flood():
             payload = json.dumps({
                 "attacker": "publish_flood",
                 "sequence": flood_count,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(datetime.timezone.utc).isoformat()
             })
             client.publish(FLOOD_TOPIC, payload, qos=0)
             flood_count += 1
