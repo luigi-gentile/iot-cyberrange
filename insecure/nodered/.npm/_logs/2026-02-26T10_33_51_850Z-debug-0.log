@@ -1,0 +1,53 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@10.8.2
+2 info using node@v20.20.0
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/data/.npmrc
+5 silly config load:file:/usr/src/node-red/.npmrc
+6 silly config load:file:/usr/local/etc/npmrc
+7 verbose title npm install node-red-contrib-influxdb
+8 verbose argv "install" "node-red-contrib-influxdb"
+9 verbose logfile logs-max:10 dir:/data/.npm/_logs/2026-02-26T10_33_51_850Z-
+10 verbose logfile /data/.npm/_logs/2026-02-26T10_33_51_850Z-debug-0.log
+11 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+12 silly logfile done cleaning log files
+13 silly idealTree buildDeps
+14 silly fetch manifest node-red-contrib-influxdb@*
+15 silly packumentCache full:https://registry.npmjs.org/node-red-contrib-influxdb cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/node-red-contrib-influxdb 791ms (cache revalidated)
+17 silly packumentCache full:https://registry.npmjs.org/node-red-contrib-influxdb set size:74764 disposed:false
+18 silly placeDep ROOT node-red-contrib-influxdb@0.7.0 OK for: node-red-project@0.0.1 want: *
+19 silly fetch manifest influx@~5.9.3
+20 silly packumentCache full:https://registry.npmjs.org/influx cache-miss
+21 silly fetch manifest @influxdata/influxdb-client@~1.33.2
+22 silly packumentCache full:https://registry.npmjs.org/@influxdata%2finfluxdb-client cache-miss
+23 silly fetch manifest lodash@~4.17.21
+24 silly packumentCache full:https://registry.npmjs.org/lodash cache-miss
+25 http fetch GET 200 https://registry.npmjs.org/lodash 154ms (cache revalidated)
+26 silly packumentCache full:https://registry.npmjs.org/lodash set size:244258 disposed:false
+27 http fetch GET 200 https://registry.npmjs.org/influx 219ms (cache revalidated)
+28 silly packumentCache full:https://registry.npmjs.org/influx set size:208634 disposed:false
+29 http fetch GET 200 https://registry.npmjs.org/@influxdata%2finfluxdb-client 698ms (cache revalidated)
+30 silly packumentCache full:https://registry.npmjs.org/@influxdata%2finfluxdb-client set size:4053587 disposed:false
+31 silly placeDep ROOT @influxdata/influxdb-client@1.33.2 OK for: node-red-contrib-influxdb@0.7.0 want: ~1.33.2
+32 silly placeDep ROOT influx@5.9.7 OK for: node-red-contrib-influxdb@0.7.0 want: ~5.9.3
+33 silly placeDep ROOT lodash@4.17.23 OK for: node-red-contrib-influxdb@0.7.0 want: ~4.17.21
+34 silly reify moves {}
+35 silly audit bulk request {
+35 silly audit   'node-red-contrib-influxdb': [ '0.7.0' ],
+35 silly audit   '@influxdata/influxdb-client': [ '1.33.2' ],
+35 silly audit   influx: [ '5.9.7' ],
+35 silly audit   lodash: [ '4.17.23' ]
+35 silly audit }
+36 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 250ms
+37 silly audit report {}
+38 silly ADD node_modules/lodash
+39 silly ADD node_modules/influx
+40 silly ADD node_modules/@influxdata/influxdb-client
+41 silly ADD node_modules/node-red-contrib-influxdb
+42 verbose cwd /data
+43 verbose os Linux 6.8.0-101-generic
+44 verbose node v20.20.0
+45 verbose npm  v10.8.2
+46 verbose exit 0
+47 info ok

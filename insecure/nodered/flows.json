@@ -1,0 +1,273 @@
+[
+    {
+        "id": "flow-main",
+        "type": "tab",
+        "label": "IoT Sensor Pipeline",
+        "disabled": false,
+        "info": "Subscribes to all MQTT sensor topics and writes data to InfluxDB"
+    },
+    {
+        "id": "mqtt-broker-config",
+        "type": "mqtt-broker",
+        "name": "Insecure MQTT Broker",
+        "broker": "172.20.0.20",
+        "port": "1883",
+        "clientid": "nodered-client",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": ""
+    },
+    {
+        "id": "influxdb-config",
+        "type": "influxdb",
+        "hostname": "172.20.0.30",
+        "port": "8086",
+        "protocol": "http",
+        "database": "sensors",
+        "name": "Insecure InfluxDB",
+        "usetls": false,
+        "tls": "",
+        "influxdbVersion": "2.0",
+        "url": "http://172.20.0.30:8086",
+        "rejectUnauthorized": false
+    },
+    {
+        "id": "mqtt-in-all",
+        "type": "mqtt in",
+        "z": "flow-main",
+        "name": "Subscribe ALL Topics",
+        "topic": "#",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "mqtt-broker-config",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 200,
+        "wires": [
+            [
+                "parse-json"
+            ]
+        ]
+    },
+    {
+        "id": "parse-json",
+        "type": "json",
+        "z": "flow-main",
+        "name": "Parse JSON Payload",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 370,
+        "y": 200,
+        "wires": [
+            [
+                "route-by-topic"
+            ]
+        ]
+    },
+    {
+        "id": "route-by-topic",
+        "type": "switch",
+        "z": "flow-main",
+        "name": "Route by Topic",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "cont",
+                "v": "temperature"
+            },
+            {
+                "t": "cont",
+                "v": "humidity"
+            },
+            {
+                "t": "cont",
+                "v": "power"
+            },
+            {
+                "t": "cont",
+                "v": "state"
+            },
+            {
+                "t": "cont",
+                "v": "heartbeat"
+            }
+        ],
+        "checkall": "false",
+        "repair": false,
+        "outputs": 5,
+        "x": 580,
+        "y": 200,
+        "wires": [
+            [
+                "build-temperature"
+            ],
+            [
+                "build-humidity"
+            ],
+            [
+                "build-power"
+            ],
+            [
+                "build-door"
+            ],
+            [
+                "build-heartbeat"
+            ]
+        ]
+    },
+    {
+        "id": "build-temperature",
+        "type": "function",
+        "z": "flow-main",
+        "name": "Build Temperature Point",
+        "func": "msg.measurement = 'temperature';\nmsg.payload = [\n    {\n        value: msg.payload.value,\n        unit: msg.payload.unit\n    },\n    {\n        device_id: msg.payload.device_id,\n        firmware: msg.payload.firmware\n    }\n];\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 100,
+        "wires": [
+            [
+                "write-influxdb",
+                "b440b974c2892b31"
+            ]
+        ]
+    },
+    {
+        "id": "build-humidity",
+        "type": "function",
+        "z": "flow-main",
+        "name": "Build Humidity Point",
+        "func": "msg.measurement = 'humidity';\nmsg.payload = [\n    { value: msg.payload.value },\n    { device_id: msg.payload.device_id, firmware: msg.payload.firmware }\n];\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 160,
+        "wires": [
+            [
+                "write-influxdb"
+            ]
+        ]
+    },
+    {
+        "id": "build-power",
+        "type": "function",
+        "z": "flow-main",
+        "name": "Build Power Point",
+        "func": "msg.measurement = 'power';\nmsg.payload = [\n    {\n        power_w: msg.payload.power_w,\n        voltage_v: msg.payload.voltage_v,\n        current_a: msg.payload.current_a,\n        plug_on: msg.payload.plug_on ? 1 : 0\n    },\n    { device_id: msg.payload.device_id, firmware: msg.payload.firmware }\n];\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 220,
+        "wires": [
+            [
+                "write-influxdb"
+            ]
+        ]
+    },
+    {
+        "id": "build-door",
+        "type": "function",
+        "z": "flow-main",
+        "name": "Build Door Point",
+        "func": "msg.measurement = 'door_state';\nmsg.payload = [\n    {\n        state_numeric: msg.payload.state === 'open' ? 1 : 0,\n        state: msg.payload.state\n    },\n    { device_id: msg.payload.device_id, firmware: msg.payload.firmware }\n];\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 280,
+        "wires": [
+            [
+                "write-influxdb"
+            ]
+        ]
+    },
+    {
+        "id": "build-heartbeat",
+        "type": "function",
+        "z": "flow-main",
+        "name": "Build Heartbeat Point",
+        "func": "msg.measurement = 'heartbeat';\nmsg.payload = [\n    { uptime_s: msg.payload.uptime_s },\n    { device_id: msg.payload.device_id, firmware: msg.payload.firmware }\n];\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 340,
+        "wires": [
+            [
+                "write-influxdb"
+            ]
+        ]
+    },
+    {
+        "id": "write-influxdb",
+        "type": "influxdb out",
+        "z": "flow-main",
+        "influxdb": "influxdb-config",
+        "name": "Write to InfluxDB",
+        "measurement": "",
+        "precision": "ms",
+        "retentionPolicy": "",
+        "database": "sensors",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "iot-cyberrange",
+        "bucket": "sensors",
+        "x": 1060,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "b440b974c2892b31",
+        "type": "debug",
+        "z": "flow-main",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 840,
+        "y": 520,
+        "wires": []
+    }
+]
