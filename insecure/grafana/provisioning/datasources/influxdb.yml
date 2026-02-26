@@ -1,0 +1,14 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://172.20.0.30:8086
+    jsonData:
+      version: Flux
+      organization: iot-cyberrange
+      defaultBucket: sensors
+      tlsSkipVerify: true
+    secureJsonData:
+      token: insecure-token-12345
