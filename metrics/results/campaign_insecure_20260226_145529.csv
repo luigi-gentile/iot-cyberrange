@@ -1,0 +1,11 @@
+scenario,phase,latency_avg_ms,latency_min_ms,latency_max_ms,throughput_msg_s,influxdb_available,nodered_available,grafana_available,temp_anomalies,humidity_anomalies,power_anomalies,temp_integrity
+scenario_1,baseline,1.1,0.66,1.46,1.07,True,True,True,21,20,0,COMPROMISED
+scenario_1,during_attack,0.92,0.31,2.51,1.07,True,True,True,21,20,0,COMPROMISED
+scenario_2,baseline,1.0,0.28,3.44,1.0,True,True,True,21,20,0,COMPROMISED
+scenario_2,during_attack,0.87,0.36,1.72,1.07,True,True,True,31,30,0,COMPROMISED
+scenario_3,baseline,1.03,0.3,1.31,1.07,True,True,True,31,30,0,COMPROMISED
+scenario_3,during_attack,0.18,0.13,0.28,1.13,True,True,True,31,30,0,COMPROMISED
+scenario_4,baseline,0.15,0.1,0.25,1.2,True,True,True,31,30,0,COMPROMISED
+scenario_4,during_attack,0.88,0.42,1.58,1.07,True,True,True,31,30,0,COMPROMISED
+scenario_5,baseline,0.89,0.34,1.93,1.2,True,True,True,31,30,0,COMPROMISED
+scenario_5,during_attack,0.95,0.43,1.84,1.07,True,True,True,31,30,0,COMPROMISED

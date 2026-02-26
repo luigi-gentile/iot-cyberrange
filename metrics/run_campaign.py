@@ -594,6 +594,34 @@ def main():
     separator("STEP 0 — Environment Check")
     setup_environment(env_config)
 
+    # ── Clear old data before starting campaign ───────────────
+    separator("CLEARING OLD DATA")
+    log("[*] Clearing InfluxDB data from previous runs...")
+    headers = {
+        "Authorization": f"Token {env_config['influxdb_token']}",
+        "Content-Type":  "application/json"
+    }
+    try:
+        response = requests.post(
+            f"{env_config['influxdb_url']}/api/v2/delete"
+            f"?org={env_config['influxdb_org']}"
+            f"&bucket={env_config['influxdb_bucket']}",
+            headers=headers,
+            json={
+                "start": "1970-01-01T00:00:00Z",
+                "stop":  datetime.now(timezone.utc).isoformat()
+            },
+            timeout=10
+        )
+        if response.status_code == 204:
+            log("[+] InfluxDB data cleared successfully")
+        else:
+            log(f"[-] InfluxDB clear warning: {response.status_code}")
+    except Exception as e:
+        log(f"[-] InfluxDB clear failed: {e}")
+    log("[*] Waiting 15s for sensors to publish fresh data...")
+    time.sleep(15)
+
     # ── Run each scenario ──────────────────────────────────────
     for scenario_num in range(1, 6):
         scenario_name = SCENARIO_NAMES[scenario_num]
