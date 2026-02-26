@@ -1,0 +1,105 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml - Insecure IoT Environment
+#
+# Simulates a flat, unprotected IoT network where all devices share the same
+# network segment with no authentication, no encryption, and no access control.
+#
+# Architecture:
+#   - One MQTT broker (Mosquitto) with anonymous access enabled
+#   - Three IoT sensors publishing data without TLS or authentication
+#   - All containers on a single flat network (172.20.0.0/24)
+#
+# Intentional vulnerabilities:
+#   - No TLS on MQTT communication
+#   - Anonymous broker access allowed
+#   - All devices on the same network segment (no segmentation)
+#   - Hardcoded credentials in sensor containers
+# ──────────────────────────────────────────────────────────────────────────────
+
+networks:
+  iot_flat:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+services:
+
+  # ────────────────────────────────────────────
+  # MQTT Broker - Eclipse Mosquitto (insecure)
+  # ────────────────────────────────────────────
+  broker:
+    image: eclipse-mosquitto:2
+    container_name: insecure_broker
+    volumes:
+      - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    ports:
+      - "1883:1883"
+    networks:
+      iot_flat:
+        ipv4_address: 172.20.0.20
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────
+  # Sensor 1 - Temperature & Humidity (DHT22-like)
+  # ────────────────────────────────────────────
+  sensor_temp:
+    build:
+      context: ./sensors
+      dockerfile: Dockerfile
+    container_name: insecure_sensor_temp
+    environment:
+      - SENSOR_SCRIPT=sensor_temp.py
+      - DEVICE_ID=sensor_temp_01
+      - BROKER_HOST=172.20.0.20
+      - BROKER_PORT=1883
+      - PUBLISH_INTERVAL=5
+    depends_on:
+      - broker
+    networks:
+      iot_flat:
+        ipv4_address: 172.20.0.10
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────
+  # Sensor 2 - Door/Window Contact (reed switch-like)
+  # ────────────────────────────────────────────
+  sensor_door:
+    build:
+      context: ./sensors
+      dockerfile: Dockerfile
+    container_name: insecure_sensor_door
+    environment:
+      - SENSOR_SCRIPT=sensor_door.py
+      - DEVICE_ID=sensor_door_01
+      - BROKER_HOST=172.20.0.20
+      - BROKER_PORT=1883
+      - CHECK_INTERVAL=3
+      - EVENT_PROBABILITY=0.2
+    depends_on:
+      - broker
+    networks:
+      iot_flat:
+        ipv4_address: 172.20.0.11
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────
+  # Sensor 3 - Smart Plug / Power Monitor
+  # ────────────────────────────────────────────
+  sensor_power:
+    build:
+      context: ./sensors
+      dockerfile: Dockerfile
+    container_name: insecure_sensor_power
+    environment:
+      - SENSOR_SCRIPT=sensor_power.py
+      - DEVICE_ID=sensor_power_01
+      - BROKER_HOST=172.20.0.20
+      - BROKER_PORT=1883
+      - PUBLISH_INTERVAL=4
+    depends_on:
+      - broker
+    networks:
+      iot_flat:
+        ipv4_address: 172.20.0.12
+    restart: unless-stopped
