@@ -103,3 +103,70 @@ services:
       iot_flat:
         ipv4_address: 172.20.0.12
     restart: unless-stopped
+
+  # ────────────────────────────────────────────
+  # InfluxDB - Time-Series Database
+  # Stores all sensor readings with timestamps.
+  # Intentional vulnerability: no authentication enabled
+  # ────────────────────────────────────────────
+  influxdb:
+    image: influxdb:2.7
+    container_name: insecure_influxdb
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123
+      - DOCKER_INFLUXDB_INIT_ORG=iot-cyberrange
+      - DOCKER_INFLUXDB_INIT_BUCKET=sensors
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=insecure-token-12345
+    ports:
+      - "8086:8086"
+    networks:
+      iot_flat:
+        ipv4_address: 172.20.0.30
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────
+  # Node-RED - IoT Flow Processor
+  # Subscribes to MQTT topics and writes data to InfluxDB.
+  # Simulates the application logic layer of an IoT platform.
+  # Intentional vulnerability: no authentication, admin UI exposed
+  # ────────────────────────────────────────────
+  nodered:
+    image: nodered/node-red:latest
+    container_name: insecure_nodered
+    environment:
+      - TZ=Europe/Rome
+    ports:
+      - "1880:1880"
+    volumes:
+      - ./nodered:/data
+    depends_on:
+      - broker
+      - influxdb
+    networks:
+      iot_flat:
+        ipv4_address: 172.20.0.31
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────
+  # Grafana - Visualization Dashboard
+  # Displays real-time sensor data from InfluxDB.
+  # Intentional vulnerability: default admin/admin credentials
+  # ────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: insecure_grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      - influxdb
+    networks:
+      iot_flat:
+        ipv4_address: 172.20.0.32
+    restart: unless-stopped
