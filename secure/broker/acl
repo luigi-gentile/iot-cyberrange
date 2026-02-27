@@ -1,0 +1,21 @@
+user sensor_temp_01
+topic write sensors/sensor_temp_01/#
+topic write heartbeat/sensor_temp_01
+
+user sensor_door_01
+topic write sensors/sensor_door_01/#
+topic write heartbeat/sensor_door_01
+topic read commands/sensor_door_01/#
+
+user sensor_power_01
+topic write sensors/sensor_power_01/#
+topic write heartbeat/sensor_power_01
+topic read commands/sensor_power_01/#
+
+user nodered
+topic read sensors/#
+topic read heartbeat/#
+
+user metrics_collector
+topic read sensors/#
+topic read heartbeat/#

@@ -1,0 +1,192 @@
+networks:
+  iot_devices:
+    name: secure_iot_devices
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
+
+  data_pipeline:
+    name: secure_data_pipeline
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24
+
+  management:
+    name: secure_management
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/24
+
+volumes:
+  secure_influxdb_data:
+  secure_influxdb_config:
+  secure_grafana_data:
+  secure_nodered_data:
+  secure_mosquitto_data:
+
+services:
+
+  broker:
+    image: eclipse-mosquitto:2
+    container_name: secure_broker
+    volumes:
+      - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./broker/passwd:/mosquitto/config/passwd:ro
+      - ./broker/acl:/mosquitto/config/acl:ro
+      - ./broker/certs:/mosquitto/certs:ro
+      - secure_mosquitto_data:/mosquitto/data
+    networks:
+      iot_devices:
+        ipv4_address: 172.21.0.20
+      data_pipeline:
+        ipv4_address: 172.22.0.20
+    restart: unless-stopped
+
+  sensor_temp:
+    build:
+      context: ./sensors
+    container_name: secure_sensor_temp
+    environment:
+      - SENSOR_TYPE=temp
+      - BROKER_HOST=172.21.0.20
+      - BROKER_PORT=8883
+      - BROKER_CA_CERT=/certs/ca.crt
+      - BROKER_USERNAME=sensor_temp_01
+      - BROKER_PASSWORD=TempSensor2026
+      - DEVICE_ID=sensor_temp_01
+      - PUBLISH_INTERVAL=5
+    volumes:
+      - ./broker/certs/ca.crt:/certs/ca.crt:ro
+    networks:
+      iot_devices:
+        ipv4_address: 172.21.0.10
+    depends_on:
+      - broker
+    restart: unless-stopped
+
+  sensor_door:
+    build:
+      context: ./sensors
+    container_name: secure_sensor_door
+    environment:
+      - SENSOR_TYPE=door
+      - BROKER_HOST=172.21.0.20
+      - BROKER_PORT=8883
+      - BROKER_CA_CERT=/certs/ca.crt
+      - BROKER_USERNAME=sensor_door_01
+      - BROKER_PASSWORD=DoorSensor2026
+      - DEVICE_ID=sensor_door_01
+      - PUBLISH_INTERVAL=3
+    volumes:
+      - ./broker/certs/ca.crt:/certs/ca.crt:ro
+    networks:
+      iot_devices:
+        ipv4_address: 172.21.0.11
+    depends_on:
+      - broker
+    restart: unless-stopped
+
+  sensor_power:
+    build:
+      context: ./sensors
+    container_name: secure_sensor_power
+    environment:
+      - SENSOR_TYPE=power
+      - BROKER_HOST=172.21.0.20
+      - BROKER_PORT=8883
+      - BROKER_CA_CERT=/certs/ca.crt
+      - BROKER_USERNAME=sensor_power_01
+      - BROKER_PASSWORD=PowerSensor2026
+      - DEVICE_ID=sensor_power_01
+      - PUBLISH_INTERVAL=4
+    volumes:
+      - ./broker/certs/ca.crt:/certs/ca.crt:ro
+    networks:
+      iot_devices:
+        ipv4_address: 172.21.0.12
+    depends_on:
+      - broker
+    restart: unless-stopped
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: secure_nodered
+    environment:
+      - TZ=Europe/Rome
+    ports:
+      - "1881:1880"
+    volumes:
+      - secure_nodered_data:/data
+      - ./nodered/settings.js:/data/settings.js:ro
+      - ./broker/certs/ca.crt:/certs/ca.crt:ro
+    networks:
+      data_pipeline:
+        ipv4_address: 172.22.0.31
+      management:
+        ipv4_address: 172.23.0.31
+    depends_on:
+      - broker
+      - influxdb
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:2
+    container_name: secure_influxdb
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=InfluxAdmin2026
+      - DOCKER_INFLUXDB_INIT_ORG=iot-cyberrange
+      - DOCKER_INFLUXDB_INIT_BUCKET=sensors
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=secure-admin-token-abc123xyz987
+    volumes:
+      - secure_influxdb_data:/var/lib/influxdb2
+      - secure_influxdb_config:/etc/influxdb2
+    networks:
+      data_pipeline:
+        ipv4_address: 172.22.0.30
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: secure_grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=GrafanaAdmin2026
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    ports:
+      - "3001:3000"
+    volumes:
+      - secure_grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      data_pipeline:
+        ipv4_address: 172.22.0.32
+      management:
+        ipv4_address: 172.23.0.32
+    depends_on:
+      - influxdb
+    restart: unless-stopped
+
+  attacker:
+    build:
+      context: ../insecure/attacker
+    container_name: secure_attacker
+    environment:
+      - BROKER_HOST=172.21.0.20
+      - BROKER_PORT=8883
+      - TARGET_SUBNET=172.21.0.0/24
+    networks:
+      iot_devices:
+        ipv4_address: 172.21.0.99
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
