@@ -20,6 +20,7 @@ Usage:
 """
 
 import paho.mqtt.client as mqtt
+import ssl
 import argparse
 import json
 import csv
@@ -46,15 +47,18 @@ ENVIRONMENTS = {
         "grafana_url":    "http://172.20.0.32:3000",
     },
     "secure": {
-        "broker_host":    "172.21.0.20",
-        "broker_port":    8883,
-        "broker_tls":     True,
-        "influxdb_url":   "http://172.22.0.30:8086",
-        "influxdb_token": "secure-token-abcdef",
-        "influxdb_org":   "iot-cyberrange",
-        "influxdb_bucket":"sensors",
-        "nodered_url":    "http://172.22.0.31:1880",
-        "grafana_url":    "http://172.23.0.32:3000",
+        "broker_host":     "172.21.0.20",
+        "broker_port":     8883,
+        "broker_tls":      True,
+        "broker_ca_cert":  os.path.expanduser("~/iot-cyberrange/secure/broker/certs/ca.crt"),
+        "broker_username": "metrics_collector",
+        "broker_password": "Metrics2026",
+        "influxdb_url":    "http://172.22.0.30:8086",
+        "influxdb_token":  "secure-admin-token-abc123xyz987",
+        "influxdb_org":    "iot-cyberrange",
+        "influxdb_bucket": "sensors",
+        "nodered_url":     "http://172.23.0.31:1880",
+        "grafana_url":     "http://172.23.0.32:3000",
     }
 }
 
@@ -67,6 +71,22 @@ def log(msg: str):
 
 
 # ──────────────────────────────────────────────
+def setup_mqtt_client(client, env_config: dict):
+    """Configure MQTT client with TLS and credentials if required."""
+    if env_config.get("broker_tls"):
+        client.tls_set(
+            ca_certs=env_config.get("broker_ca_cert"),
+            tls_version=ssl.PROTOCOL_TLS_CLIENT
+        )
+        client.tls_insecure_set(False)
+    if env_config.get("broker_username"):
+        client.username_pw_set(
+            env_config.get("broker_username"),
+            env_config.get("broker_password", "")
+        )
+    return client
+
+
 # Metric 1: MQTT Latency
 # ──────────────────────────────────────────────
 
@@ -111,6 +131,7 @@ def measure_mqtt_latency(env_config: dict, samples: int = 20) -> dict:
     client.on_connect = on_connect
     client.on_message = on_message
     client.on_publish = on_publish
+    setup_mqtt_client(client, env_config)
 
     try:
         client.connect(
@@ -182,6 +203,7 @@ def measure_mqtt_throughput(env_config: dict, duration: int = 10) -> dict:
     )
     client.on_connect = on_connect
     client.on_message = on_message
+    setup_mqtt_client(client, env_config)
 
     try:
         client.connect(

@@ -1,0 +1,507 @@
+{
+  "environment": "secure",
+  "started_at": "2026-02-28T08:20:36.918305+00:00",
+  "scenarios": {
+    "scenario_1": {
+      "name": "Eavesdropping",
+      "number": 1,
+      "baseline": {
+        "label": "baseline",
+        "timestamp": "2026-02-28T08:21:32.502962+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 16.64,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 4.65,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 2.89,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 32,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 32,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 39,
+            "anomalies": 9,
+            "integrity": "COMPROMISED"
+          }
+        }
+      },
+      "during_attack": {
+        "label": "during_attack",
+        "timestamp": "2026-02-28T08:23:35.655107+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 13.6,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 7.68,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 3.71,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 56,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 56,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 70,
+            "anomalies": 16,
+            "integrity": "COMPROMISED"
+          }
+        }
+      }
+    },
+    "scenario_2": {
+      "name": "Message Injection",
+      "number": 2,
+      "baseline": {
+        "label": "baseline",
+        "timestamp": "2026-02-28T08:25:59.245458+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 11.43,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 5.15,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 2.76,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 85,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 85,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 106,
+            "anomalies": 21,
+            "integrity": "COMPROMISED"
+          }
+        }
+      },
+      "during_attack": {
+        "label": "during_attack",
+        "timestamp": "2026-02-28T08:27:57.508545+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 13.64,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 4.91,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 2.34,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 108,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 108,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 136,
+            "anomalies": 26,
+            "integrity": "COMPROMISED"
+          }
+        }
+      }
+    },
+    "scenario_3": {
+      "name": "Denial of Service",
+      "number": 3,
+      "baseline": {
+        "label": "baseline",
+        "timestamp": "2026-02-28T08:30:21.093452+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 11.23,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 3.79,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 2.39,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 137,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 137,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 171,
+            "anomalies": 29,
+            "integrity": "COMPROMISED"
+          }
+        }
+      },
+      "during_attack": {
+        "label": "during_attack",
+        "timestamp": "2026-02-28T08:32:24.240510+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 14.08,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 6.46,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 2.51,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 161,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 161,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 202,
+            "anomalies": 35,
+            "integrity": "COMPROMISED"
+          }
+        }
+      }
+    },
+    "scenario_4": {
+      "name": "Brute Force",
+      "number": 4,
+      "baseline": {
+        "label": "baseline",
+        "timestamp": "2026-02-28T08:34:47.754690+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 14.28,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 4.48,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 4.63,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 190,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 190,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 238,
+            "anomalies": 41,
+            "integrity": "COMPROMISED"
+          }
+        }
+      },
+      "during_attack": {
+        "label": "during_attack",
+        "timestamp": "2026-02-28T08:36:50.958798+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 14.65,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 4.61,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 2.82,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 214,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 214,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 269,
+            "anomalies": 47,
+            "integrity": "COMPROMISED"
+          }
+        }
+      }
+    },
+    "scenario_5": {
+      "name": "Lateral Movement",
+      "number": 5,
+      "baseline": {
+        "label": "baseline",
+        "timestamp": "2026-02-28T08:39:14.549048+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 13.74,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 4.52,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 2.5,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 243,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 243,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 305,
+            "anomalies": 50,
+            "integrity": "COMPROMISED"
+          }
+        }
+      },
+      "during_attack": {
+        "label": "during_attack",
+        "timestamp": "2026-02-28T08:41:17.705801+00:00",
+        "latency": {
+          "error": "no samples",
+          "samples": [],
+          "avg_ms": -1
+        },
+        "throughput": {
+          "duration_s": 15,
+          "total_messages": 0,
+          "messages_per_sec": 0.0
+        },
+        "services": {
+          "influxdb": {
+            "status_code": 200,
+            "response_ms": 3.73,
+            "available": true
+          },
+          "nodered": {
+            "status_code": 200,
+            "response_ms": 1.35,
+            "available": true
+          },
+          "grafana": {
+            "status_code": 200,
+            "response_ms": 1.04,
+            "available": true
+          }
+        },
+        "integrity": {
+          "temperature": {
+            "record_count": 267,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "humidity": {
+            "record_count": 267,
+            "anomalies": 0,
+            "integrity": "OK"
+          },
+          "power": {
+            "record_count": 336,
+            "anomalies": 58,
+            "integrity": "COMPROMISED"
+          }
+        }
+      }
+    }
+  },
+  "completed_at": "2026-02-28T08:43:15.803912+00:00"
+}

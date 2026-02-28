@@ -1,0 +1,65 @@
+{
+  "environment": "secure",
+  "mode": "baseline",
+  "scenario": null,
+  "timestamp": "2026-02-28T07:51:01.281479+00:00",
+  "broker": "172.21.0.20:8883",
+  "latency": {
+    "samples": [
+      1.41,
+      1.26,
+      1.41,
+      0.61,
+      1.17,
+      1.34,
+      1.48,
+      1.37,
+      1.23,
+      2.46,
+      1.02,
+      1.91,
+      0.96,
+      2.12,
+      0.24,
+      1.43,
+      1.41,
+      1.63,
+      1.3,
+      1.25
+    ],
+    "count": 20,
+    "min_ms": 0.24,
+    "max_ms": 2.46,
+    "avg_ms": 1.35
+  },
+  "throughput": {
+    "duration_s": 10,
+    "total_messages": 9,
+    "messages_per_sec": 0.9
+  },
+  "broker_stats": {},
+  "services": {
+    "influxdb": {
+      "status_code": 200,
+      "response_ms": 8.78,
+      "available": true
+    },
+    "nodered": {
+      "status_code": 200,
+      "response_ms": 7.26,
+      "available": true
+    },
+    "grafana": {
+      "status_code": 200,
+      "response_ms": 3.58,
+      "available": true
+    }
+  },
+  "data_integrity": {
+    "temperature": {
+      "record_count": 719,
+      "anomalies": 0,
+      "integrity": "OK"
+    }
+  }
+}

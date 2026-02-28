@@ -1,0 +1,41 @@
+{
+  "environment": "secure",
+  "mode": "baseline",
+  "scenario": null,
+  "timestamp": "2026-02-28T07:48:01.082868+00:00",
+  "broker": "172.21.0.20:8883",
+  "latency": {
+    "error": "no samples collected",
+    "samples": []
+  },
+  "throughput": {
+    "duration_s": 10,
+    "total_messages": 11,
+    "messages_per_sec": 1.1
+  },
+  "broker_stats": {},
+  "services": {
+    "influxdb": {
+      "status_code": 200,
+      "response_ms": 15.89,
+      "available": true
+    },
+    "nodered": {
+      "status_code": 200,
+      "response_ms": 3.98,
+      "available": true
+    },
+    "grafana": {
+      "status_code": 200,
+      "response_ms": 4.28,
+      "available": true
+    }
+  },
+  "data_integrity": {
+    "temperature": {
+      "record_count": 721,
+      "anomalies": 0,
+      "integrity": "OK"
+    }
+  }
+}

@@ -30,12 +30,29 @@ import time
 import os
 import requests
 import paho.mqtt.client as mqtt
+import ssl
 from datetime import datetime, timezone
 
 
 # ──────────────────────────────────────────────
 # Environment configurations
 # ──────────────────────────────────────────────
+def setup_mqtt_client(client, env_config: dict):
+    """Configure MQTT client with TLS and credentials if required."""
+    if env_config.get("broker_tls"):
+        client.tls_set(
+            ca_certs=env_config.get("broker_ca_cert"),
+            tls_version=ssl.PROTOCOL_TLS_CLIENT
+        )
+        client.tls_insecure_set(False)
+    if env_config.get("broker_username"):
+        client.username_pw_set(
+            env_config.get("broker_username"),
+            env_config.get("broker_password", "")
+        )
+    return client
+
+
 ENVIRONMENTS = {
     "insecure": {
         "broker_host":        "172.20.0.20",
@@ -54,14 +71,18 @@ ENVIRONMENTS = {
         "broker_host":        "172.21.0.20",
         "broker_port":        8883,
         "broker_tls":         True,
+        "broker_ca_cert":     os.path.expanduser("~/iot-cyberrange/secure/broker/certs/ca.crt"),
+        "broker_username":    "metrics_collector",
+        "broker_password":    "Metrics2026",
         "influxdb_url":       "http://172.22.0.30:8086",
-        "influxdb_token":     "secure-token-abcdef",
+        "influxdb_token":     "secure-admin-token-abc123xyz987",
         "influxdb_org":       "iot-cyberrange",
         "influxdb_bucket":    "sensors",
-        "nodered_url":        "http://172.22.0.31:1880",
+        "nodered_url":        "http://172.23.0.31:1880",
         "grafana_url":        "http://172.23.0.32:3000",
         "compose_dir":        os.path.expanduser("~/iot-cyberrange/secure"),
         "attacker_container": "secure_attacker",
+        "sensor_containers":  ["secure_sensor_temp", "secure_sensor_door", "secure_sensor_power"],
     }
 }
 
@@ -182,6 +203,7 @@ def measure_latency(env_config: dict, samples: int = 20) -> dict:
         mqtt.CallbackAPIVersion.VERSION2,
         client_id="campaign_latency_probe"
     )
+    setup_mqtt_client(client, env_config)
     client.on_connect = on_connect
     client.on_message = on_message
     client.on_publish = on_publish
@@ -244,6 +266,7 @@ def measure_throughput(env_config: dict, duration: int = 15) -> dict:
         mqtt.CallbackAPIVersion.VERSION2,
         client_id="campaign_throughput_probe"
     )
+    setup_mqtt_client(client, env_config)
     client.on_connect = on_connect
     client.on_message = on_message
 
