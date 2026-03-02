@@ -51,7 +51,7 @@
         "type": "mqtt in",
         "z": "flow-main",
         "name": "Subscribe ALL Topics",
-        "topic": "#",
+        "topic": "sensors/#",
         "qos": "0",
         "datatype": "auto-detect",
         "broker": "mqtt-broker-config",
@@ -140,14 +140,19 @@
         "type": "function",
         "z": "flow-main",
         "name": "Build Temperature Point",
-        "func": "msg.measurement = 'temperature';\nmsg.payload = [\n    {\n        measurement: 'temperature',\n        tags: {\n            device_id: msg.payload.device_id,\n            firmware: msg.payload.firmware\n        },\n        fields: {\n            value: msg.payload.value,\n            unit: msg.payload.unit\n        },\n        timestamp: new Date(msg.payload.timestamp)\n    }\n];\nreturn msg;",
+        "func": "msg.measurement = 'temperature';\nmsg.payload = [\n    {\n        value: msg.payload.value,\n        unit: msg.payload.unit\n    },\n    {\n        device_id: msg.payload.device_id,\n        firmware: msg.payload.firmware\n    }\n];\nreturn msg;",
         "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
         "x": 820,
         "y": 100,
         "wires": [
             [
                 "write-influxdb",
-                "b440b974c2892b31"
+                "aa850e642157b209"
             ]
         ]
     },
@@ -156,8 +161,13 @@
         "type": "function",
         "z": "flow-main",
         "name": "Build Humidity Point",
-        "func": "msg.measurement = 'humidity';\nmsg.payload = [\n    {\n        measurement: 'humidity',\n        tags: {\n            device_id: msg.payload.device_id,\n            firmware: msg.payload.firmware\n        },\n        fields: {\n            value: msg.payload.value,\n            unit: msg.payload.unit\n        },\n        timestamp: new Date(msg.payload.timestamp)\n    }\n];\nreturn msg;",
+        "func": "msg.measurement = 'humidity';\nmsg.payload = [\n    { value: msg.payload.value },\n    { device_id: msg.payload.device_id, firmware: msg.payload.firmware }\n];\nreturn msg;",
         "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
         "x": 820,
         "y": 160,
         "wires": [
@@ -171,8 +181,13 @@
         "type": "function",
         "z": "flow-main",
         "name": "Build Power Point",
-        "func": "msg.measurement = 'power';\nmsg.payload = [\n    {\n        measurement: 'power',\n        tags: {\n            device_id: msg.payload.device_id,\n            device_model: msg.payload.device_model,\n            firmware: msg.payload.firmware\n        },\n        fields: {\n            power_w: msg.payload.power_w,\n            voltage_v: msg.payload.voltage_v,\n            current_a: msg.payload.current_a,\n            plug_on: msg.payload.plug_on ? 1 : 0\n        },\n        timestamp: new Date(msg.payload.timestamp)\n    }\n];\nreturn msg;",
+        "func": "msg.measurement = 'power';\nmsg.payload = [\n    {\n        power_w: msg.payload.power_w,\n        voltage_v: msg.payload.voltage_v,\n        current_a: msg.payload.current_a,\n        plug_on: msg.payload.plug_on ? 1 : 0\n    },\n    { device_id: msg.payload.device_id, firmware: msg.payload.firmware }\n];\nreturn msg;",
         "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
         "x": 820,
         "y": 220,
         "wires": [
@@ -186,8 +201,13 @@
         "type": "function",
         "z": "flow-main",
         "name": "Build Door Point",
-        "func": "msg.measurement = 'door_state';\nmsg.payload = [\n    {\n        measurement: 'door_state',\n        tags: {\n            device_id: msg.payload.device_id,\n            firmware: msg.payload.firmware\n        },\n        fields: {\n            state: msg.payload.state,\n            state_numeric: msg.payload.state === 'open' ? 1 : 0,\n            event_triggered: msg.payload.event_triggered ? 1 : 0\n        },\n        timestamp: new Date(msg.payload.timestamp)\n    }\n];\nreturn msg;",
+        "func": "msg.measurement = 'door_state';\nmsg.payload = [\n    {\n        state_numeric: msg.payload.state === 'open' ? 1 : 0,\n        state: msg.payload.state\n    },\n    { device_id: msg.payload.device_id, firmware: msg.payload.firmware }\n];\nreturn msg;",
         "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
         "x": 820,
         "y": 280,
         "wires": [
@@ -201,8 +221,13 @@
         "type": "function",
         "z": "flow-main",
         "name": "Build Heartbeat Point",
-        "func": "msg.measurement = 'heartbeat';\nmsg.payload = [\n    {\n        measurement: 'heartbeat',\n        tags: {\n            device_id: msg.payload.device_id,\n            firmware: msg.payload.firmware\n        },\n        fields: {\n            status: msg.payload.status,\n            uptime_s: msg.payload.uptime_s || 0\n        },\n        timestamp: new Date(msg.payload.timestamp)\n    }\n];\nreturn msg;",
+        "func": "msg.measurement = 'heartbeat';\nmsg.payload = [\n    { uptime_s: msg.payload.uptime_s },\n    { device_id: msg.payload.device_id, firmware: msg.payload.firmware }\n];\nreturn msg;",
         "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
         "x": 820,
         "y": 340,
         "wires": [
@@ -230,7 +255,7 @@
         "wires": []
     },
     {
-        "id": "b440b974c2892b31",
+        "id": "aa850e642157b209",
         "type": "debug",
         "z": "flow-main",
         "name": "debug 1",
@@ -241,8 +266,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 840,
-        "y": 520,
+        "x": 600,
+        "y": 380,
         "wires": []
     }
 ]
