@@ -181,6 +181,8 @@ services:
       context: ./attacker
       dockerfile: Dockerfile
     container_name: insecure_attacker
+    volumes:
+      - ./attacker/scripts:/attacker/scripts
     environment:
       - BROKER_HOST=172.20.0.20
       - BROKER_PORT=1883
