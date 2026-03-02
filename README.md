@@ -59,7 +59,7 @@ SECURE ENVIRONMENT
 │                          │  │                          │  │                  │
 │ sensor_temp (172.21.0.10)│  │  InfluxDB (172.22.0.30)  │  │  admin access    │
 │ sensor_door (172.21.0.11)│  │  Node-RED (172.22.0.31)  │  │                  │
-│sensor_power (172.21.0.12)│ │ Grafana  (172.22.0.32)   │  │                  │
+│sensor_power (172.21.0.12)│  │ Grafana  (172.22.0.32)   │  │                  │
 │ broker TLS  (172.21.0.20)│  │                          │  │                  │
 │ attacker    (172.21.0.99)│  │                          │  │                  │
 └──────────────────────────┘  └──────────────────────────┘  └──────────────────┘
