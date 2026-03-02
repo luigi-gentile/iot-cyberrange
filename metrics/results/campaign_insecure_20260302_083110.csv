@@ -1,0 +1,11 @@
+scenario,phase,latency_avg_ms,latency_min_ms,latency_max_ms,throughput_msg_s,influxdb_available,nodered_available,grafana_available,temp_anomalies,humidity_anomalies,power_anomalies,temp_integrity,ttd_seconds,ttd_detected,ttd_alert_count
+scenario_1,baseline,0.15,0.1,0.25,1.13,True,True,True,0,0,0,OK,,,
+scenario_1,during_attack,0.17,0.14,0.35,1.2,True,True,True,0,0,0,OK,,,
+scenario_2,baseline,0.16,0.1,0.29,1.07,True,True,True,0,0,0,OK,,,
+scenario_2,during_attack,0.76,0.28,1.06,1.13,True,True,True,10,10,0,COMPROMISED,,,
+scenario_3,baseline,0.85,0.21,3.67,1.07,True,True,True,10,10,0,COMPROMISED,,,
+scenario_3,during_attack,0.88,0.33,1.51,1.2,True,True,True,10,10,0,COMPROMISED,,,
+scenario_4,baseline,0.85,0.3,1.26,1.13,True,True,True,10,10,0,COMPROMISED,,,
+scenario_4,during_attack,0.81,0.21,1.08,1.13,True,True,True,10,10,0,COMPROMISED,,,
+scenario_5,baseline,0.97,0.24,3.07,1.2,True,True,True,10,10,0,COMPROMISED,,,
+scenario_5,during_attack,1.0,0.29,2.38,1.13,True,True,True,10,10,0,COMPROMISED,,,
