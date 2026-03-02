@@ -24,3 +24,6 @@ user metrics_collector
 topic readwrite metrics/latency/probe
 topic read sensors/#
 topic read heartbeat/#
+
+user metrics_collector
+topic readwrite metrics/dos/latency

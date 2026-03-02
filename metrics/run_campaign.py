@@ -30,6 +30,9 @@ import time
 import os
 import requests
 import paho.mqtt.client as mqtt
+import sys
+sys.path.insert(0, os.path.dirname(__file__))
+from suricata_ttd import calculate_ttd, clear_alerts
 import ssl
 from datetime import datetime, timezone
 
@@ -80,6 +83,7 @@ ENVIRONMENTS = {
         "influxdb_bucket":    "sensors",
         "nodered_url":        "http://172.23.0.31:1880",
         "grafana_url":        "http://172.23.0.32:3000",
+        "suricata_eve":       os.path.expanduser("~/iot-cyberrange/secure/suricata/logs/eve.json"),
         "compose_dir":        os.path.expanduser("~/iot-cyberrange/secure"),
         "attacker_container": "secure_attacker",
         "sensor_containers":  ["secure_sensor_temp", "secure_sensor_door", "secure_sensor_power"],
@@ -472,11 +476,29 @@ def run_attack(env_config: dict, scenario: int):
 
     log(f"[*] Launching attack: {' '.join(script)}")
 
+    # Clear Suricata alerts before attack if available
+    eve_log = env_config.get("suricata_eve")
+    if eve_log:
+        clear_alerts(eve_log)
+
+    attack_start = datetime.now(timezone.utc)
+
     subprocess.run(
         ["docker", "exec", container] + script,
         text=True
     )
 
+    # Calculate TTD if Suricata is configured
+    if eve_log:
+        ttd_result = calculate_ttd(scenario, attack_start, eve_log)
+        if ttd_result["detected"]:
+            log(f"[+] Suricata TTD: {ttd_result['ttd_seconds']}s | Alerts: {ttd_result['alert_count']}")
+            for sig in ttd_result["signatures"]:
+                log(f"    -> {sig}")
+        else:
+            log(f"[~] Suricata: no alerts for scenario {scenario}")
+        return ttd_result
+    return None
 
 # ──────────────────────────────────────────────
 # Report generation
@@ -520,9 +542,13 @@ def generate_report(campaign_results: dict, env: str) -> tuple:
             "humidity_anomalies",
             "power_anomalies",
             "temp_integrity",
+            "ttd_seconds",
+            "ttd_detected",
+            "ttd_alert_count",
         ])
 
         for scenario_key, scenario_data in campaign_results["scenarios"].items():
+            ttd = scenario_data.get("ttd", {})
             for phase in ["baseline", "during_attack"]:
                 if phase not in scenario_data:
                     continue
@@ -547,6 +573,9 @@ def generate_report(campaign_results: dict, env: str) -> tuple:
                     intg.get("humidity",    {}).get("anomalies", ""),
                     intg.get("power",       {}).get("anomalies", ""),
                     intg.get("temperature", {}).get("integrity", ""),
+                    ttd.get("ttd_seconds", "") if phase == "during_attack" else "",
+                    ttd.get("detected", "") if phase == "during_attack" else "",
+                    ttd.get("alert_count", "") if phase == "during_attack" else "",
                 ])
 
     return json_path, csv_path
@@ -666,10 +695,12 @@ def main():
 
         # Launch attack in background thread
         log(f"[*] Launching Scenario {scenario_num}: {scenario_name}")
-        attack_thread = threading.Thread(
-            target=run_attack,
-            args=(env_config, scenario_num)
-        )
+        ttd_container = {}
+        def run_attack_with_ttd():
+            result = run_attack(env_config, scenario_num)
+            if result:
+                ttd_container["ttd"] = result
+        attack_thread = threading.Thread(target=run_attack_with_ttd)
         attack_thread.start()
 
         # Scenario 2 (injection): wait for attack to complete before measuring
@@ -688,6 +719,8 @@ def main():
             )
             attack_thread.join()
             log(f"[+] Scenario {scenario_num} complete")
+        if ttd_container.get("ttd"):
+            scenario_results["ttd"] = ttd_container["ttd"]
 
         campaign_results["scenarios"][scenario_key] = scenario_results
 

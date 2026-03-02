@@ -1,0 +1,24 @@
+# IoT Cyberrange - Suricata Rules (TCP/TLS based, no payload inspection)
+
+# SCENARIO 1 - Eavesdropping
+alert tcp any any -> 172.21.0.20 8883 (msg:"IOT-CYBERRANGE S1 Failed TLS connection - eavesdropping attempt"; flow:to_server; flags:S; threshold:type both,track by_src,count 3,seconds 10; sid:1000001; rev:3;)
+
+# SCENARIO 2 - Injection
+alert tcp any any -> 172.21.0.20 8883 (msg:"IOT-CYBERRANGE S2 Repeated failed connections - injection attempt"; flow:to_server; flags:S; threshold:type both,track by_src,count 5,seconds 15; sid:1000002; rev:3;)
+
+# SCENARIO 3 - DoS
+alert tcp any any -> 172.21.0.20 8883 (msg:"IOT-CYBERRANGE S3 TCP SYN flood to MQTT broker"; flow:to_server; flags:S; threshold:type both,track by_src,count 15,seconds 3; sid:1000003; rev:3;)
+
+alert tcp any any -> 172.21.0.20 8883 (msg:"IOT-CYBERRANGE S3 High connection rate to MQTT broker"; flow:to_server; flags:S; threshold:type both,track by_src,count 25,seconds 5; sid:1000004; rev:3;)
+
+# SCENARIO 4 - Brute Force
+alert tcp any any -> 172.21.0.20 8883 (msg:"IOT-CYBERRANGE S4 Brute force - rapid TLS reconnects"; flow:to_server; flags:S; threshold:type both,track by_src,count 8,seconds 20; sid:1000005; rev:3;)
+
+# SCENARIO 5 - Lateral Movement
+alert tcp any any -> 172.21.0.0/24 any (msg:"IOT-CYBERRANGE S5 Port scan on IoT network"; flow:to_server; flags:S; threshold:type both,track by_src,count 20,seconds 5; sid:1000006; rev:3;)
+
+alert tcp 172.21.0.0/24 any -> 172.22.0.0/24 any (msg:"IOT-CYBERRANGE S5 Lateral movement to data pipeline"; flow:to_server; flags:S; threshold:type limit,track by_src,count 1,seconds 60; sid:1000007; rev:3;)
+
+alert tcp 172.21.0.0/24 any -> any 1880 (msg:"IOT-CYBERRANGE S5 Node-RED access from IoT network"; flow:to_server; flags:S; threshold:type limit,track by_src,count 1,seconds 60; sid:1000008; rev:3;)
+
+alert tcp 172.21.0.0/24 any -> any 8086 (msg:"IOT-CYBERRANGE S5 InfluxDB access from IoT network"; flow:to_server; flags:S; threshold:type limit,track by_src,count 1,seconds 60; sid:1000009; rev:3;)

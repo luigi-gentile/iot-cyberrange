@@ -1,0 +1,59 @@
+%YAML 1.1
+---
+vars:
+  address-groups:
+    HOME_NET: "[172.21.0.0/24,172.22.0.0/24]"
+    EXTERNAL_NET: "any"
+  port-groups:
+    MQTT_PORTS: "1883,8883,8884"
+
+default-log-dir: /var/log/suricata
+
+rule-files:
+  - /etc/suricata/rules/iot-cyberrange.rules
+
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      types:
+        - alert:
+            payload: yes
+            payload-printable: yes
+            packet: yes
+            metadata: yes
+
+app-layer:
+  protocols:
+    mqtt:
+      enabled: yes
+    tls:
+      enabled: yes
+      detection-ports:
+        dp: 8883
+
+af-packet:
+  - interface: default
+
+logging:
+  default-log-level: info
+  outputs:
+    - console:
+        enabled: yes
+    - file:
+        enabled: yes
+        level: info
+        filename: /var/log/suricata/suricata.log
+
+detection-engine:
+  profile: medium
+
+threading:
+  set-cpu-affinity: no
+
+unix-command:
+  enabled: no
+
+legacy:
+  uricontent: enabled
