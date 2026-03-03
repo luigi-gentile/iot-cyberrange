@@ -133,14 +133,18 @@ services:
   # Intentional vulnerability: no authentication, admin UI exposed
   # ────────────────────────────────────────────
   nodered:
-    image: nodered/node-red:latest
+    build:
+      context: ./nodered
+      dockerfile: Dockerfile
     container_name: insecure_nodered
     environment:
       - TZ=Europe/Rome
     ports:
       - "1880:1880"
     volumes:
-      - ./nodered:/data
+      - ./nodered/flows.json:/data/flows.json:ro
+      - ./nodered/flows_cred.json:/data/flows_cred.json:ro
+      - ./nodered/settings.js:/data/settings.js:ro
     depends_on:
       - broker
       - influxdb
@@ -201,4 +205,6 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    stdin_open: true
+    tty: true
     restart: unless-stopped
