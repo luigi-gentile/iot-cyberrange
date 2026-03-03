@@ -1,11 +1,11 @@
 # Suricata IDS
 
-Suricata non è nel docker-compose perché richiede il nome del bridge
-dinamico della rete Docker. Per avviarlo:
+Suricata is not included in docker-compose because it requires the dynamically
+assigned bridge interface name of the Docker network. To start it, run:
 
     bash ~/iot-cyberrange/secure/suricata/start_suricata.sh
 
-Oppure manualmente:
+Or manually:
 
     NETWORK_ID=$(docker network inspect secure_iot_devices --format '{{.Id}}' | cut -c1-12)
     docker run -d --name secure_suricata --network host \
