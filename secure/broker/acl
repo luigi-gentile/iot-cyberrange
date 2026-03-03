@@ -21,3 +21,4 @@ topic read sensors/#
 topic read heartbeat/#
 topic readwrite metrics/latency/probe
 topic readwrite metrics/dos/latency
+topic readwrite metrics/dos/probe
