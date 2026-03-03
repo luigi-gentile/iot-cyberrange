@@ -619,6 +619,18 @@ def _scenario_security_label(scenario_num: int, scenario_data: dict, env: str) -
     elif scenario_num == 3:
         # Availability: measure latency / throughput degradation vs baseline.
         # Threshold: >10% latency increase OR >10% throughput drop → DEGRADED.
+        #
+        # Exception — SECURE env: the TLS flood targets NEW connection attempts,
+        # not existing ones. The campaign's latency monitor is already connected
+        # with valid credentials and is not affected by TLS rejection storms, so
+        # the latency delta is meaningless as a DoS indicator here.
+        # Instead, use Suricata detection as evidence: if the IDS triggered,
+        # the attack was real and availability was genuinely degraded for any
+        # client trying to establish a new connection during the flood.
+        if env == "secure":
+            detected = scenario_data.get("ttd", {}).get("detected", False)
+            return "DEGRADED" if detected else "OK"
+
         lat_d = snap.get("latency",    {}).get("avg_ms")
         lat_b = base.get("latency",    {}).get("avg_ms")
         thr_d = snap.get("throughput", {}).get("messages_per_sec")
