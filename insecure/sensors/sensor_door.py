@@ -35,7 +35,18 @@ HARDCODED_PASS  = "password"
 BROKER_HOST      = os.getenv("BROKER_HOST", "172.20.0.20")
 BROKER_PORT      = int(os.getenv("BROKER_PORT", 1883))
 CHECK_INTERVAL   = int(os.getenv("CHECK_INTERVAL", 3))   # seconds between state checks
-EVENT_PROBABILITY = float(os.getenv("EVENT_PROBABILITY", 0.2))  # 20% chance of state change
+# Probability of the door OPENING per check (when closed).
+# 2% per 3 s ≈ ~1 opening every 2-3 minutes — realistic for a monitored entrance.
+OPEN_PROBABILITY  = float(os.getenv("OPEN_PROBABILITY", 0.02))
+# Probability of the door CLOSING per check (when open, after MIN_OPEN_SECS).
+CLOSE_PROBABILITY = float(os.getenv("CLOSE_PROBABILITY", 0.15))
+# Minimum seconds the door stays open before it can auto-close.
+MIN_OPEN_SECS     = float(os.getenv("MIN_OPEN_SECS", 20.0))
+
+# ──────────────────────────────────────────────
+# Door state — time-aware to enforce realistic open/close durations
+# ──────────────────────────────────────────────
+_last_change = 0.0   # monotonic timestamp of last state change
 
 # ──────────────────────────────────────────────
 # MQTT topics
@@ -151,14 +162,26 @@ def main():
 
     # Initial door state
     current_state = "closed"
+    global _last_change
+    _last_change = time.monotonic()
     print(f"[{DEVICE_ID}] Initial state: {current_state}")
 
     try:
         while True:
-            # Randomly trigger a state change based on EVENT_PROBABILITY
-            if random.random() < EVENT_PROBABILITY:
+            elapsed = time.monotonic() - _last_change
+            # Determine transition probability based on current state and elapsed time:
+            #   closed → open : low base probability (realistic opening rate)
+            #   open   → closed: only after the door has been open long enough
+            if current_state == "closed":
+                should_change = random.random() < OPEN_PROBABILITY
+            else:
+                # Door must stay open at least MIN_OPEN_SECS before auto-closing
+                should_change = elapsed >= MIN_OPEN_SECS and random.random() < CLOSE_PROBABILITY
+
+            if should_change:
                 previous_state = current_state
-                current_state = "open" if current_state == "closed" else "closed"
+                current_state  = "open" if current_state == "closed" else "closed"
+                _last_change   = time.monotonic()
 
                 # Publish state change event
                 client.publish(

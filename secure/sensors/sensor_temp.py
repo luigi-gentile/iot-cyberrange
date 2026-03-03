@@ -24,6 +24,15 @@ TOPIC_TEMPERATURE = f"sensors/{DEVICE_ID}/temperature"
 TOPIC_HUMIDITY    = f"sensors/{DEVICE_ID}/humidity"
 TOPIC_STATUS      = f"status/{DEVICE_ID}/heartbeat"
 
+# Sensor state — random walk for realistic readings
+_temp = 22.0
+_hum  = 55.0
+
+def _walk(current, center, sigma, lo, hi):
+    """Gaussian random walk with gentle mean reversion toward center."""
+    step = random.gauss(0, sigma) + 0.05 * (center - current)
+    return round(max(lo, min(hi, current + step)), 2)
+
 def build_payload(sensor_type, value, unit):
     return json.dumps({
         "device_id": DEVICE_ID,
@@ -63,9 +72,12 @@ def main():
     client.loop_start()
     time.sleep(2)
     try:
+        global _temp, _hum
         while True:
-            temperature = round(random.uniform(18.0, 35.0), 2)
-            humidity    = round(random.uniform(30.0, 90.0), 2)
+            _temp = _walk(_temp, 22.0, 0.2, 18.0, 35.0)
+            _hum  = _walk(_hum,  55.0, 0.8, 30.0, 90.0)
+            temperature = _temp
+            humidity    = _hum
             client.publish(TOPIC_TEMPERATURE, build_payload("temperature", temperature, "celsius"), qos=1)
             print(f"[{DEVICE_ID}] Temperature: {temperature}C")
             client.publish(TOPIC_HUMIDITY, build_payload("humidity", humidity, "%"), qos=1)

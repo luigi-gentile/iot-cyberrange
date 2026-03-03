@@ -42,6 +42,18 @@ TOPIC_TEMPERATURE   = f"sensors/{DEVICE_ID}/temperature"
 TOPIC_HUMIDITY      = f"sensors/{DEVICE_ID}/humidity"
 TOPIC_STATUS        = f"status/{DEVICE_ID}/heartbeat"
 
+# ──────────────────────────────────────────────
+# Sensor state — random walk for realistic readings
+# ──────────────────────────────────────────────
+_temp = 22.0   # current temperature (°C)
+_hum  = 55.0   # current humidity (%)
+
+def _walk(current: float, center: float, sigma: float,
+          lo: float, hi: float) -> float:
+    """Gaussian random walk with gentle mean reversion toward center."""
+    step = random.gauss(0, sigma) + 0.05 * (center - current)
+    return round(max(lo, min(hi, current + step)), 2)
+
 
 def build_payload(sensor_type: str, value: float, unit: str) -> str:
     """
@@ -119,10 +131,14 @@ def main():
     time.sleep(1)
 
     try:
+        global _temp, _hum
         while True:
-            # Simulate realistic sensor readings with slight noise
-            temperature = round(random.uniform(18.0, 35.0), 2)
-            humidity    = round(random.uniform(30.0, 90.0), 2)
+            # Random walk: small Gaussian step + mean reversion
+            # Typical change: ±0.2°C / ±0.8% per 5-second reading
+            _temp = _walk(_temp, 22.0, 0.2, 18.0, 35.0)
+            _hum  = _walk(_hum,  55.0, 0.8, 30.0, 90.0)
+            temperature = _temp
+            humidity    = _hum
 
             # Publish temperature reading
             client.publish(

@@ -25,11 +25,26 @@ TOPIC_COMMAND = f"commands/{DEVICE_ID}/set"
 
 plug_on = True
 
+# Power simulation state — random walk with device modes
+_power_mode = "idle"   # "idle" (~80-120W) or "active" (~150-250W)
+_power_w    = 100.0    # current wattage
+
+def _walk(current, center, sigma, lo, hi):
+    """Gaussian random walk with gentle mean reversion toward center."""
+    step = random.gauss(0, sigma) + 0.05 * (center - current)
+    return round(max(lo, min(hi, current + step)), 2)
+
 def build_power_payload():
+    global _power_mode, _power_w
     if plug_on:
-        voltage = round(random.uniform(220.0, 230.0), 2)
-        current = round(random.uniform(0.5, 2.0), 3)
-        power   = round(voltage * current, 2)
+        # Occasional mode transition (3% per reading ≈ once every ~2 min)
+        if random.random() < 0.03:
+            _power_mode = "active" if _power_mode == "idle" else "idle"
+        center   = 100.0 if _power_mode == "idle" else 200.0
+        _power_w = _walk(_power_w, center, 5.0, 50.0, 300.0)
+        voltage  = round(random.uniform(220.0, 230.0), 2)
+        current  = round(_power_w / voltage, 3)
+        power    = round(_power_w, 2)
     else:
         voltage = round(random.uniform(220.0, 230.0), 2)
         current = 0.0

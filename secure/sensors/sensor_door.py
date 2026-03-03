@@ -23,7 +23,13 @@ TOPIC_DOOR    = f"sensors/{DEVICE_ID}/door"
 TOPIC_STATUS  = f"status/{DEVICE_ID}/heartbeat"
 TOPIC_COMMAND = f"commands/{DEVICE_ID}/set"
 
-door_state = "closed"
+door_state   = "closed"
+_last_change = 0.0   # monotonic timestamp of last door state change
+
+# 2% chance to open per check; closes after ≥20 s with 15% probability per check
+OPEN_PROBABILITY  = float(os.getenv("OPEN_PROBABILITY",  0.02))
+CLOSE_PROBABILITY = float(os.getenv("CLOSE_PROBABILITY", 0.15))
+MIN_OPEN_SECS     = float(os.getenv("MIN_OPEN_SECS",     20.0))
 
 def build_door_payload(state):
     return json.dumps({
@@ -71,10 +77,20 @@ def main():
     client.connect(BROKER_HOST, BROKER_PORT, keepalive=60)
     client.loop_start()
     time.sleep(2)
+    global _last_change
+    _last_change = time.monotonic()
     try:
         while True:
-            if random.random() < 0.3:
-                door_state = random.choice(["open", "closed"])
+            elapsed = time.monotonic() - _last_change
+            if door_state == "closed":
+                should_change = random.random() < OPEN_PROBABILITY
+            else:
+                should_change = elapsed >= MIN_OPEN_SECS and random.random() < CLOSE_PROBABILITY
+
+            if should_change:
+                global door_state
+                door_state   = "open" if door_state == "closed" else "closed"
+                _last_change = time.monotonic()
             client.publish(TOPIC_DOOR, build_door_payload(door_state), qos=1)
             print(f"[{DEVICE_ID}] Door: {door_state}")
             client.publish(TOPIC_STATUS, build_heartbeat(), qos=1)

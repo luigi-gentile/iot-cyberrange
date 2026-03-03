@@ -54,6 +54,18 @@ device_state = {
     "uptime":  0
 }
 
+# ──────────────────────────────────────────────
+# Power simulation state — random walk with device modes
+# ──────────────────────────────────────────────
+_power_mode = "idle"    # "idle" (~80-120W) or "active" (~150-250W)
+_power_w    = 100.0     # current wattage
+
+def _walk(current: float, center: float, sigma: float,
+          lo: float, hi: float) -> float:
+    """Gaussian random walk with gentle mean reversion toward center."""
+    step = random.gauss(0, sigma) + 0.05 * (center - current)
+    return round(max(lo, min(hi, current + step)), 2)
+
 
 def build_power_payload(watts: float, voltage: float, current: float) -> str:
     """
@@ -155,22 +167,30 @@ def on_publish(client, userdata, mid, reason_code, properties):
 
 def simulate_power_reading() -> tuple:
     """
-    Simulate realistic power consumption readings.
+    Simulate realistic power consumption using a two-state device model.
 
-    When plug is on: simulates a device consuming between 50W and 300W.
-    When plug is off: returns zero values.
+    Modes:
+      idle   — ~80-120W  (background activity, fans, screen)
+      active — ~150-250W (under load: uploads, processing)
 
-    Returns:
-        Tuple of (watts, voltage, current)
+    State transitions occur with 3% probability per reading.
+    Within each state, wattage follows a Gaussian random walk.
     """
+    global _power_mode, _power_w
+
     if not device_state["plug_on"]:
         return 0.0, 0.0, 0.0
 
-    voltage = round(random.uniform(219.0, 231.0), 2)   # EU standard ~230V
-    watts   = round(random.uniform(50.0, 300.0), 2)
-    current = round(watts / voltage, 3)
+    # Occasional mode transition (3% per reading ≈ once every ~2 min)
+    if random.random() < 0.03:
+        _power_mode = "active" if _power_mode == "idle" else "idle"
 
-    return watts, voltage, current
+    center = 100.0 if _power_mode == "idle" else 200.0
+    _power_w = _walk(_power_w, center, 5.0, 50.0, 300.0)
+
+    voltage = round(random.uniform(219.0, 231.0), 2)
+    current = round(_power_w / voltage, 3)
+    return round(_power_w, 2), voltage, current
 
 
 def main():
