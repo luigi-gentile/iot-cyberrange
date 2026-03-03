@@ -23,6 +23,9 @@ networks:
       config:
         - subnet: 172.20.0.0/24
 
+volumes:
+  insecure_nodered_data:
+
 services:
 
   # ────────────────────────────────────────────
@@ -140,7 +143,10 @@ services:
     ports:
       - "1880:1880"
     volumes:
-      - ./nodered:/data
+      - insecure_nodered_data:/data
+      - ./nodered/flows.json:/data/flows.json:ro
+      - ./nodered/settings.js:/data/settings.js:ro
+      - ./nodered/package.json:/data/package.json:ro
     depends_on:
       - broker
       - influxdb
@@ -201,4 +207,6 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    stdin_open: true
+    tty: true
     restart: unless-stopped

@@ -122,6 +122,7 @@ services:
     volumes:
       - secure_nodered_data:/data
       - ./nodered/settings.js:/data/settings.js:ro
+      - ./nodered/flows.json:/data/flows.json:ro
       - ./broker/certs/ca.crt:/certs/ca.crt:ro
     networks:
       data_pipeline:
@@ -183,6 +184,7 @@ services:
       - TARGET_SUBNET=172.21.0.0/24
     volumes:
       - ./attacker/scripts:/attacker/scripts:ro
+      - ./broker/certs/ca.crt:/certs/ca.crt:ro
     networks:
       iot_devices:
         ipv4_address: 172.21.0.99
