@@ -586,32 +586,41 @@ def print_summary(campaign_results: dict):
 
     separator("CAMPAIGN SUMMARY")
 
+    env = campaign_results.get("environment", "")
+
     header = (
-        f"{'Scenario':<22} {'Phase':<20} "
+        f"{'Scenario':<22} "
         f"{'Lat avg':<12} {'Throughput':<15} "
-        f"{'Anomalies':<12} {'Integrity'}"
+        f"{'Anomalies':<12} {'Security'}"
     )
     print(header)
     print("-" * len(header))
 
     for scenario_key, scenario_data in campaign_results["scenarios"].items():
         name = scenario_data.get("name", scenario_key)
-        for phase in ["baseline", "during_attack"]:
-            if phase not in scenario_data:
-                continue
 
-            snap = scenario_data[phase]
-            lat  = snap.get("latency",    {}).get("avg_ms", "N/A")
-            thr  = snap.get("throughput", {}).get("messages_per_sec", "N/A")
-            anom = snap.get("integrity",  {}).get("temperature", {}).get("anomalies", "N/A")
-            intg = snap.get("integrity",  {}).get("temperature", {}).get("integrity", "N/A")
+        snap = scenario_data.get("during_attack")
+        if snap is None:
+            continue
 
-            label = f"{scenario_key} ({name[:10]})"
-            print(
-                f"{label:<22} {phase:<20} "
-                f"{str(lat)+'ms':<12} {str(thr)+' msg/s':<15} "
-                f"{str(anom):<12} {intg}"
-            )
+        lat  = snap.get("latency",    {}).get("avg_ms", "N/A")
+        thr  = snap.get("throughput", {}).get("messages_per_sec", "N/A")
+        anom = snap.get("integrity",  {}).get("temperature", {}).get("anomalies", "N/A")
+        intg = snap.get("integrity",  {}).get("temperature", {}).get("integrity", "N/A")
+
+        # Scenario 1 (eavesdropping) is a confidentiality breach, not a data-integrity
+        # violation. The anomaly check always returns 0/OK because no data is modified,
+        # but privacy is fully compromised in an insecure (no-TLS) environment.
+        scenario_num = int(scenario_key.split("_")[-1]) if "_" in scenario_key else 0
+        if scenario_num == 1 and env == "insecure":
+            intg = "BREACHED"
+
+        label = f"{scenario_key} ({name[:10]})"
+        print(
+            f"{label:<22} "
+            f"{str(lat)+'ms':<12} {str(thr)+' msg/s':<15} "
+            f"{str(anom):<12} {intg}"
+        )
 
     print("")
 
