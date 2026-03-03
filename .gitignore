@@ -1,0 +1,24 @@
+# Node-RED runtime files
+**/nodered/flows_cred.json
+**/nodered/package-lock.json
+**/nodered/.config.*.json
+**/nodered/.flows.json.backup
+**/nodered/.npm/
+**/nodered/node_modules/
+**/nodered/lib/
+
+# Suricata runtime logs
+secure/suricata/logs/eve.json
+secure/suricata/logs/suricata.log
+
+# Python
+**/__pycache__/
+**/*.pyc
+
+# Results (keep structure but not data)
+metrics/results/*.json
+metrics/results/*.csv
+
+# Certificates private keys
+secure/broker/certs/ca.key
+secure/broker/certs/server.key
