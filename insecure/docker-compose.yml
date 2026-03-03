@@ -23,9 +23,6 @@ networks:
       config:
         - subnet: 172.20.0.0/24
 
-volumes:
-  insecure_nodered_data:
-
 services:
 
   # ────────────────────────────────────────────
@@ -136,17 +133,18 @@ services:
   # Intentional vulnerability: no authentication, admin UI exposed
   # ────────────────────────────────────────────
   nodered:
-    image: nodered/node-red:latest
+    build:
+      context: ./nodered
+      dockerfile: Dockerfile
     container_name: insecure_nodered
     environment:
       - TZ=Europe/Rome
     ports:
       - "1880:1880"
     volumes:
-      - insecure_nodered_data:/data
       - ./nodered/flows.json:/data/flows.json:ro
+      - ./nodered/flows_cred.json:/data/flows_cred.json:ro
       - ./nodered/settings.js:/data/settings.js:ro
-      - ./nodered/package.json:/data/package.json:ro
     depends_on:
       - broker
       - influxdb
