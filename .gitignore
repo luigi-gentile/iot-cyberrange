@@ -19,6 +19,9 @@ secure/suricata/logs/suricata.log
 metrics/results/*.json
 metrics/results/*.csv
 
+# Generated figures (produced by running analysis.ipynb)
+metrics/figures/
+
 # Certificates private keys
 secure/broker/certs/ca.key
 secure/broker/certs/server.key
