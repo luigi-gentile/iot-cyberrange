@@ -213,7 +213,12 @@ insecure_grafana     Up
 insecure_attacker    Up
 ```
 
-**Access services:**
+**Access services (from browser on the host machine):**
+- Grafana: `http://<host-ip>:3000` (admin/admin)
+- InfluxDB: `http://<host-ip>:8086`
+- Node-RED: `http://<host-ip>:1880`
+
+**Access services (from within Docker network):**
 - Grafana: http://172.20.0.32:3000 (admin/admin)
 - InfluxDB: http://172.20.0.30:8086
 - Node-RED: http://172.20.0.31:1880
@@ -427,17 +432,15 @@ docker exec secure_attacker bash scripts/02_inject.sh
 
 ### S3 — Denial of Service
 
-Floods the broker with 50 concurrent clients publishing 10,000 messages each.
+Subscription amplification attack: 50 concurrent workers subscribe to all readable topics before flooding, creating an N-fold fanout that saturates the broker's message routing capacity.
 
 ```bash
 docker exec insecure_attacker python3 scripts/03_dos.py
 docker exec secure_attacker python3 scripts/03_dos.py
 ```
 
-**Insecure result:** +5814% latency degradation; 500,000 messages delivered.  
-**Secure result:** +70% latency degradation; 0 messages delivered; TLS cost limits flood effectiveness.
-
-> **Note on methodology:** Latency is measured by a dedicated monitor thread (not the flood itself) to obtain accurate broker responsiveness metrics during the attack.
+**Insecure result:** All 50 workers connect; +471% latency degradation (0.74ms → 4.23ms); broker routing 500,000 deliveries/s.
+**Secure result:** Only 16/50 workers connect (`max_connections=20`); ACL limits topics to `sensors/#` and `metrics/dos/latency`; +98% latency degradation (0.97ms → 1.92ms); attack partially mitigated.
 
 ---
 
@@ -464,7 +467,7 @@ docker exec insecure_attacker bash scripts/05_lateral_movement.sh
 docker exec secure_attacker bash scripts/05_lateral_movement.sh
 ```
 
-**Insecure result:** 3 services compromised (Node-RED, InfluxDB, Grafana); 147 records exfiltrated.  
+**Insecure result:** 3 services compromised (Node-RED, InfluxDB, Grafana); 908 sensor records exfiltrated.
 **Secure result:** Network segmentation blocks all cross-subnet access; 0 services reached.
 
 ---
@@ -483,11 +486,11 @@ docker exec secure_attacker bash scripts/05_lateral_movement.sh
 
 | Scenario | Insecure | Secure | TTD |
 |---|---|---|---|
-| S1 Eavesdropping | 131 msgs captured | 0 msgs captured | Not detected (attack too brief) |
-| S2 Injection | 21 msgs injected | 0 msgs injected | Not detected (attack too brief) |
-| S3 DoS | +5814% latency | +70% latency | 10.09s |
-| S4 Brute Force | 24/24 credentials | 0/12 credentials | 7.20s |
-| S5 Lateral Movement | 3 services breached | 0 services reached | 5.17s |
+| S1 Eavesdropping | ~133 msgs captured | 0 msgs captured | Not detected (preventive control) |
+| S2 Injection | 21 msgs injected | 0 msgs injected | Not detected (preventive control) |
+| S3 DoS | +471% latency (50/50 workers) | +98% latency (16/50 workers) | 10.1s |
+| S4 Brute Force | 24/24 credentials | 0/12 credentials | 7.2s |
+| S5 Lateral Movement | 3 services breached, 908 records | 0 services reached | 5.0s |
 
 ---
 
