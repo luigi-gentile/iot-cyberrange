@@ -184,7 +184,7 @@ services:
       - TARGET_SUBNET=172.21.0.0/24
     volumes:
       - ./attacker/scripts:/attacker/scripts:ro
-      - ./broker/certs/ca.crt:/certs/ca.crt:ro
+      - ./broker/certs/ca.crt:/attacker/ca.crt:ro
     networks:
       iot_devices:
         ipv4_address: 172.21.0.99
