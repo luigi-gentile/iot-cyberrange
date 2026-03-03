@@ -1,105 +1,380 @@
 {
-  "title": "IoT Cyberrange - Insecure Environment",
-  "tags": ["iot", "insecure", "cyberrange"],
-  "timezone": "browser",
-  "panels": [
-    {
-      "title": "Temperature (°C)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-      "id": 1,
-      "targets": [
-        {
-          "datasource": {"type": "influxdb"},
-          "query": "from(bucket: \"sensors\")\n  |> range(start: -15m)\n  |> filter(fn: (r) => r._measurement == \"temperature\")\n  |> filter(fn: (r) => r._field == \"value\")",
-          "refId": "A"
+  "dashboard": {
+    "title": "IoT Cyberrange — Insecure Environment",
+    "tags": ["iot", "insecure", "cyberrange"],
+    "timezone": "browser",
+    "refresh": "5s",
+    "time": {"from": "now-15m", "to": "now"},
+    "schemaVersion": 42,
+    "uid": "insecure-iot-v2",
+    "version": 2,
+    "panels": [
+
+      {
+        "id": 20,
+        "type": "text",
+        "title": "",
+        "gridPos": {"h": 2, "w": 24, "x": 0, "y": 0},
+        "options": {
+          "content": "# ⚠ INSECURE ENVIRONMENT\nNo authentication &nbsp;·&nbsp; No TLS encryption &nbsp;·&nbsp; Flat network topology &nbsp;·&nbsp; No IDS monitoring",
+          "mode": "markdown"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "celsius",
-          "color": {"mode": "palette-classic"}
+      },
+
+      {
+        "id": 1,
+        "type": "stat",
+        "title": "Temperature",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 2},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -5m) |> filter(fn:(r) => r._measurement == \"temperature\") |> filter(fn:(r) => r._field == \"value\") |> last()",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green",  "value": null},
+                {"color": "orange", "value": 28},
+                {"color": "red",    "value": 35}
+              ]
+            },
+            "mappings": []
+          },
+          "overrides": []
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+          "textMode": "auto",
+          "wideLayout": true
+        }
+      },
+
+      {
+        "id": 2,
+        "type": "stat",
+        "title": "Humidity",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 2},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -5m) |> filter(fn:(r) => r._measurement == \"humidity\") |> filter(fn:(r) => r._field == \"value\") |> last()",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "blue",   "value": null},
+                {"color": "orange", "value": 75},
+                {"color": "red",    "value": 90}
+              ]
+            },
+            "mappings": []
+          },
+          "overrides": []
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+          "textMode": "auto",
+          "wideLayout": true
+        }
+      },
+
+      {
+        "id": 3,
+        "type": "stat",
+        "title": "Power",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 2},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -5m) |> filter(fn:(r) => r._measurement == \"power\") |> filter(fn:(r) => r._field == \"power_w\") |> last()",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "watt",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green",  "value": null},
+                {"color": "orange", "value": 175},
+                {"color": "red",    "value": 260}
+              ]
+            },
+            "mappings": []
+          },
+          "overrides": []
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+          "textMode": "auto",
+          "wideLayout": true
+        }
+      },
+
+      {
+        "id": 4,
+        "type": "stat",
+        "title": "Door Status",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 2},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -5m) |> filter(fn:(r) => r._measurement == \"door_state\") |> filter(fn:(r) => r._field == \"state_numeric\") |> last()",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red",   "value": 1}
+              ]
+            },
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "0": {"color": "green", "index": 0, "text": "CLOSED"},
+                  "1": {"color": "red",   "index": 1, "text": "OPEN"}
+                }
+              }
+            ]
+          },
+          "overrides": []
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+          "textMode": "auto",
+          "wideLayout": true
+        }
+      },
+
+      {
+        "id": 5,
+        "type": "timeseries",
+        "title": "Temperature (°C)",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -15m) |> filter(fn:(r) => r._measurement == \"temperature\") |> filter(fn:(r) => r._field == \"value\")",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "color": {"fixedColor": "orange", "mode": "fixed"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "fillOpacity": 15,
+              "gradientMode": "opacity",
+              "showPoints": "never",
+              "spanNulls": false,
+              "thresholdsStyle": {"mode": "line+area"}
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "transparent", "value": null},
+                {"color": "rgba(255,120,0,0.1)", "value": 28},
+                {"color": "rgba(255,0,0,0.15)",  "value": 35}
+              ]
+            },
+            "mappings": []
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {"calcs": ["mean", "max", "last"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+          "tooltip": {"mode": "single", "sort": "none"}
+        }
+      },
+
+      {
+        "id": 6,
+        "type": "timeseries",
+        "title": "Humidity (%)",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -15m) |> filter(fn:(r) => r._measurement == \"humidity\") |> filter(fn:(r) => r._field == \"value\")",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {"fixedColor": "blue", "mode": "fixed"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "fillOpacity": 15,
+              "gradientMode": "opacity",
+              "showPoints": "never",
+              "spanNulls": false,
+              "thresholdsStyle": {"mode": "off"}
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{"color": "green", "value": null}, {"color": "red", "value": 80}]
+            },
+            "mappings": []
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {"calcs": ["mean", "max", "last"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+          "tooltip": {"mode": "single", "sort": "none"}
+        }
+      },
+
+      {
+        "id": 7,
+        "type": "timeseries",
+        "title": "Power Consumption (W)",
+        "gridPos": {"h": 8, "w": 16, "x": 0, "y": 14},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -15m) |> filter(fn:(r) => r._measurement == \"power\") |> filter(fn:(r) => r._field == \"power_w\")",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "watt",
+            "color": {"fixedColor": "yellow", "mode": "fixed"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "showPoints": "never",
+              "spanNulls": false,
+              "thresholdsStyle": {"mode": "off"}
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{"color": "green", "value": null}, {"color": "red", "value": 80}]
+            },
+            "mappings": []
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {"calcs": ["mean", "max", "last"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+          "tooltip": {"mode": "single", "sort": "none"}
+        }
+      },
+
+      {
+        "id": 8,
+        "type": "state-timeline",
+        "title": "Door State",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 14},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -15m) |> filter(fn:(r) => r._measurement == \"door_state\") |> filter(fn:(r) => r._field == \"state_numeric\")",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red",   "value": 1}
+              ]
+            },
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "0": {"color": "green", "index": 0, "text": "CLOSED"},
+                  "1": {"color": "red",   "index": 1, "text": "OPEN"}
+                }
+              }
+            ],
+            "custom": {"fillOpacity": 70, "lineWidth": 0}
+          },
+          "overrides": []
+        },
+        "options": {
+          "alignValue": "center",
+          "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true},
+          "rowHeight": 0.85,
+          "showValue": "always",
+          "tooltip": {"mode": "single", "sort": "none"},
+          "mergeValues": true
+        }
+      },
+
+      {
+        "id": 9,
+        "type": "timeseries",
+        "title": "Device Uptime (s)",
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 22},
+        "targets": [{
+          "datasource": {"type": "influxdb"},
+          "query": "from(bucket:\"sensors\") |> range(start: -15m) |> filter(fn:(r) => r._measurement == \"heartbeat\") |> filter(fn:(r) => r._field == \"uptime_s\")",
+          "refId": "A"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "fillOpacity": 8,
+              "gradientMode": "none",
+              "showPoints": "never",
+              "spanNulls": false
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{"color": "green", "value": null}, {"color": "red", "value": 80}]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {"calcs": ["last"], "displayMode": "table", "placement": "right", "showLegend": true},
+          "tooltip": {"mode": "multi", "sort": "none"}
         }
       }
-    },
-    {
-      "title": "Humidity (%)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-      "id": 2,
-      "targets": [
-        {
-          "datasource": {"type": "influxdb"},
-          "query": "from(bucket: \"sensors\")\n  |> range(start: -15m)\n  |> filter(fn: (r) => r._measurement == \"humidity\")\n  |> filter(fn: (r) => r._field == \"value\")",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "color": {"mode": "palette-classic"}
-        }
-      }
-    },
-    {
-      "title": "Power Consumption (W)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-      "id": 3,
-      "targets": [
-        {
-          "datasource": {"type": "influxdb"},
-          "query": "from(bucket: \"sensors\")\n  |> range(start: -15m)\n  |> filter(fn: (r) => r._measurement == \"power\")\n  |> filter(fn: (r) => r._field == \"power_w\")",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "color": {"mode": "palette-classic"}
-        }
-      }
-    },
-    {
-      "title": "Door State (0=closed, 1=open)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-      "id": 4,
-      "targets": [
-        {
-          "datasource": {"type": "influxdb"},
-          "query": "from(bucket: \"sensors\")\n  |> range(start: -15m)\n  |> filter(fn: (r) => r._measurement == \"door_state\")\n  |> filter(fn: (r) => r._field == \"state_numeric\")",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "bars"}
-        }
-      }
-    },
-    {
-      "title": "Device Uptime (s)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
-      "id": 5,
-      "targets": [
-        {
-          "datasource": {"type": "influxdb"},
-          "query": "from(bucket: \"sensors\")\n  |> range(start: -15m)\n  |> filter(fn: (r) => r._measurement == \"heartbeat\")\n  |> filter(fn: (r) => r._field == \"uptime_s\")",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": {"mode": "palette-classic"}
-        }
-      }
-    }
-  ],
-  "refresh": "5s",
-  "time": {"from": "now-15m", "to": "now"},
-  "schemaVersion": 38
+
+    ]
+  },
+  "overwrite": true,
+  "folderId": 0
 }
