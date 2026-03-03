@@ -335,13 +335,17 @@ def measure_services(env_config: dict) -> dict:
     return results
 
 
-def check_data_integrity(env_config: dict) -> dict:
+def check_data_integrity(env_config: dict, since: str = "-2m") -> dict:
     """
     Check InfluxDB for anomalous sensor readings caused by injection attacks.
-    Detects values outside expected physical ranges in the last 10 minutes.
+    Detects values outside expected physical ranges.
 
     Args:
         env_config: Environment configuration dict
+        since:      Flux range start — either a relative duration (e.g. "-2m")
+                    or an RFC3339 timestamp (e.g. "2026-03-03T10:00:00Z").
+                    Defaults to "-2m" so each snapshot only looks at fresh data
+                    and avoids counting anomalies from previous scenarios.
 
     Returns:
         Dict with record counts and anomaly detection per measurement
@@ -357,10 +361,12 @@ def check_data_integrity(env_config: dict) -> dict:
     )
 
     # (measurement, field, max_normal, min_normal)
+    # power_w max = 230V × 2.0A = 460W → use 500W to avoid false positives
+    # from the sensor simulator's legitimate upper range.
     checks = {
         "temperature": ("temperature", "value",   50.0,  -10.0),
         "humidity":    ("humidity",    "value",   100.0,    0.1),
-        "power":       ("power",       "power_w", 400.0,   -1.0),
+        "power":       ("power",       "power_w", 500.0,   -1.0),
     }
 
     results = {}
@@ -368,7 +374,7 @@ def check_data_integrity(env_config: dict) -> dict:
     for name, (measurement, field, max_val, min_val) in checks.items():
         query = f'''
 from(bucket: "{env_config['influxdb_bucket']}")
-  |> range(start: -1h)
+  |> range(start: {since})
   |> filter(fn: (r) => r._measurement == "{measurement}")
   |> filter(fn: (r) => r._field == "{field}")
 '''
@@ -420,13 +426,15 @@ from(bucket: "{env_config['influxdb_bucket']}")
     return results
 
 
-def collect_snapshot(env_config: dict, label: str) -> dict:
+def collect_snapshot(env_config: dict, label: str, since: str = "-2m") -> dict:
     """
     Collect a complete metrics snapshot at a given point in time.
 
     Args:
         env_config: Environment configuration dict
-        label: Label for this snapshot (e.g. 'baseline', 'during_attack')
+        label:      Label for this snapshot (e.g. 'baseline', 'during_attack')
+        since:      Passed to check_data_integrity — limits the integrity query
+                    to data after this time so previous scenarios don't bleed in.
 
     Returns:
         Dict with all metrics
@@ -439,7 +447,7 @@ def collect_snapshot(env_config: dict, label: str) -> dict:
         "latency":    measure_latency(env_config),
         "throughput": measure_throughput(env_config),
         "services":   measure_services(env_config),
-        "integrity":  check_data_integrity(env_config),
+        "integrity":  check_data_integrity(env_config, since=since),
     }
 
     log(
@@ -587,12 +595,20 @@ def print_summary(campaign_results: dict):
     separator("CAMPAIGN SUMMARY")
 
     env = campaign_results.get("environment", "")
+    is_secure = (env == "secure")
 
-    header = (
-        f"{'Scenario':<22} "
-        f"{'Lat avg':<12} {'Throughput':<15} "
-        f"{'Anomalies':<12} {'Security'}"
-    )
+    if is_secure:
+        header = (
+            f"{'Scenario':<22} "
+            f"{'Lat avg':<12} {'Throughput':<15} "
+            f"{'Anomalies':<12} {'Security':<15} {'Detection'}"
+        )
+    else:
+        header = (
+            f"{'Scenario':<22} "
+            f"{'Lat avg':<12} {'Throughput':<15} "
+            f"{'Anomalies':<12} {'Security'}"
+        )
     print(header)
     print("-" * len(header))
 
@@ -616,11 +632,34 @@ def print_summary(campaign_results: dict):
             intg = "BREACHED"
 
         label = f"{scenario_key} ({name[:10]})"
-        print(
-            f"{label:<22} "
-            f"{str(lat)+'ms':<12} {str(thr)+' msg/s':<15} "
-            f"{str(anom):<12} {intg}"
-        )
+
+        if is_secure:
+            # Build Detection column:
+            # S1/S2: TLS completely blocks the attack — no IDS alert expected.
+            # S3/S4/S5: Suricata should detect; show TTD if available.
+            ttd_data = scenario_data.get("ttd", {})
+            detected  = ttd_data.get("detected", False)
+            ttd_secs  = ttd_data.get("ttd_seconds")
+            if scenario_num in (1, 2):
+                detection = "TLS BLOCKED"
+            elif detected and ttd_secs is not None:
+                detection = f"DETECTED {ttd_secs:.1f}s"
+            elif detected:
+                detection = "DETECTED"
+            else:
+                detection = "NOT DETECTED"
+
+            print(
+                f"{label:<22} "
+                f"{str(lat)+'ms':<12} {str(thr)+' msg/s':<15} "
+                f"{str(anom):<12} {intg:<15} {detection}"
+            )
+        else:
+            print(
+                f"{label:<22} "
+                f"{str(lat)+'ms':<12} {str(thr)+' msg/s':<15} "
+                f"{str(anom):<12} {intg}"
+            )
 
     print("")
 
@@ -698,12 +737,17 @@ def main():
         # Reset only device state between scenarios
         reset_between_scenarios(env_config)
 
-        # Collect baseline before attack
+        # Collect baseline before attack (short -2m window = clean pre-attack data)
         log("[*] Collecting baseline metrics...")
         scenario_results["baseline"] = collect_snapshot(env_config, "baseline")
 
         # Launch attack in background thread
         log(f"[*] Launching Scenario {scenario_num}: {scenario_name}")
+
+        # Record start time BEFORE the attack so the during_attack integrity
+        # query is scoped to this scenario only (no bleed-in from past scenarios).
+        scenario_start = datetime.now(timezone.utc).isoformat()
+
         ttd_container = {}
         def run_attack_with_ttd():
             result = run_attack(env_config, scenario_num)
@@ -719,12 +763,12 @@ def main():
             attack_thread.join()
             log(f"[+] Scenario {scenario_num} complete")
             scenario_results["during_attack"] = collect_snapshot(
-                env_config, "during_attack"
+                env_config, "during_attack", since=scenario_start
             )
         else:
             time.sleep(5)
             scenario_results["during_attack"] = collect_snapshot(
-                env_config, "during_attack"
+                env_config, "during_attack", since=scenario_start
             )
             attack_thread.join()
             log(f"[+] Scenario {scenario_num} complete")
