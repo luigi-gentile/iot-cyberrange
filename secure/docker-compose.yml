@@ -123,6 +123,7 @@ services:
       - secure_nodered_data:/data
       - ./nodered/settings.js:/data/settings.js:ro
       - ./nodered/flows.json:/data/flows.json:ro
+      - ./nodered/flows_cred.json:/data/flows_cred.json:ro
       - ./broker/certs/ca.crt:/certs/ca.crt:ro
     networks:
       data_pipeline:

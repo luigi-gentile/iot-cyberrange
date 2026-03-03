@@ -88,7 +88,6 @@ def main():
                 should_change = elapsed >= MIN_OPEN_SECS and random.random() < CLOSE_PROBABILITY
 
             if should_change:
-                global door_state
                 door_state   = "open" if door_state == "closed" else "closed"
                 _last_change = time.monotonic()
             client.publish(TOPIC_DOOR, build_door_payload(door_state), qos=1)

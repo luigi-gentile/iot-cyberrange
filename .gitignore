@@ -1,6 +1,5 @@
 # Node-RED runtime files
-# insecure/nodered/flows_cred.json is intentionally tracked (pre-generated credentials for lab reproducibility)
-secure/nodered/flows_cred.json
+# Both flows_cred.json files are intentionally tracked (pre-generated credentials for lab reproducibility)
 **/nodered/package-lock.json
 **/nodered/.config.*.json
 **/nodered/.flows.json.backup

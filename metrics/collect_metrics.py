@@ -266,6 +266,7 @@ def collect_broker_stats(env_config: dict) -> dict:
     )
     client.on_connect = on_connect
     client.on_message = on_message
+    setup_mqtt_client(client, env_config)
 
     try:
         client.connect(
@@ -395,6 +396,76 @@ from(bucket: "{env_config['influxdb_bucket']}")
 
     except Exception as e:
         results["temperature"] = {"error": str(e)}
+
+    # Check humidity readings
+    hum_query = f'''
+from(bucket: "{env_config['influxdb_bucket']}")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "humidity")
+  |> filter(fn: (r) => r._field == "value")
+'''
+
+    try:
+        response = requests.post(url, headers=headers, data=hum_query, timeout=10)
+        lines = [l for l in response.text.split('\n') if l and not l.startswith('#')]
+        record_count = max(0, len(lines) - 1)
+
+        # Detect anomalous humidity values (>100% or <0.1%)
+        anomalies = 0
+        for line in lines[1:]:
+            parts = line.split(',')
+            if len(parts) > 5:
+                try:
+                    value = float(parts[-1].strip())
+                    if value > 100.0 or value < 0.1:
+                        anomalies += 1
+                except ValueError:
+                    pass
+
+        results["humidity"] = {
+            "record_count": record_count,
+            "anomalies":    anomalies,
+            "integrity":    "COMPROMISED" if anomalies > 0 else "OK"
+        }
+        log(f"[+] Humidity: {record_count} records, {anomalies} anomalies detected")
+
+    except Exception as e:
+        results["humidity"] = {"error": str(e)}
+
+    # Check power readings
+    power_query = f'''
+from(bucket: "{env_config['influxdb_bucket']}")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "power")
+  |> filter(fn: (r) => r._field == "power_w")
+'''
+
+    try:
+        response = requests.post(url, headers=headers, data=power_query, timeout=10)
+        lines = [l for l in response.text.split('\n') if l and not l.startswith('#')]
+        record_count = max(0, len(lines) - 1)
+
+        # Detect anomalous power values (>400W or <-1W)
+        anomalies = 0
+        for line in lines[1:]:
+            parts = line.split(',')
+            if len(parts) > 5:
+                try:
+                    value = float(parts[-1].strip())
+                    if value > 400.0 or value < -1.0:
+                        anomalies += 1
+                except ValueError:
+                    pass
+
+        results["power"] = {
+            "record_count": record_count,
+            "anomalies":    anomalies,
+            "integrity":    "COMPROMISED" if anomalies > 0 else "OK"
+        }
+        log(f"[+] Power: {record_count} records, {anomalies} anomalies detected")
+
+    except Exception as e:
+        results["power"] = {"error": str(e)}
 
     return results
 

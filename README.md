@@ -266,10 +266,10 @@ The pre-configured credentials are:
 
 | User | Password | Role |
 |---|---|---|
-| `sensor_temp_01` | `TempSensor2026!` | Temperature sensor |
-| `sensor_door_01` | `DoorSensor2026!` | Door sensor |
-| `sensor_power_01` | `PowerSensor2026!` | Power sensor |
-| `nodered` | `NodeRed2026!` | Data pipeline |
+| `sensor_temp_01` | `TempSensor2026` | Temperature sensor |
+| `sensor_door_01` | `DoorSensor2026` | Door sensor |
+| `sensor_power_01` | `PowerSensor2026` | Power sensor |
+| `nodered` | `NodeRed2026` | Data pipeline |
 | `metrics_collector` | `Metrics2026` | Campaign orchestrator |
 
 #### 3. Copy CA certificate to attacker container

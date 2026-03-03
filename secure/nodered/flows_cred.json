@@ -1,0 +1,9 @@
+{
+    "mqtt-broker-secure": {
+        "user": "nodered",
+        "password": "NodeRed2026"
+    },
+    "influxdb-secure": {
+        "token": "secure-admin-token-abc123xyz987"
+    }
+}

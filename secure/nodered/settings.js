@@ -1,6 +1,6 @@
 module.exports = {
     uiPort: 1880,
-    credentialSecret: "iot-cyberrange-secret-2026",
+    credentialSecret: false,
     adminAuth: {
         type: "credentials",
         users: [{
