@@ -1,5 +1,5 @@
 #!/bin/bash
-# Trova il bridge della rete iot_devices dinamicamente e avvia Suricata
+# Dynamically resolve the iot_devices bridge interface and start Suricata
 NETWORK_ID=$(docker network inspect secure_iot_devices --format '{{.Id}}' | cut -c1-12)
 INTERFACE="br-${NETWORK_ID}"
 
