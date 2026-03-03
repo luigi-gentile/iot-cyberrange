@@ -19,7 +19,7 @@ secure/suricata/logs/suricata.log
 metrics/results/*.json
 metrics/results/*.csv
 
-# Generated figures (produced by running analysis.ipynb)
+# Generated figures (produced by running metrics/generate_figures.py)
 metrics/figures/
 
 # Certificates private keys
