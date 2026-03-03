@@ -1,12 +1,11 @@
 {
-  "dashboard": {
-    "title": "IoT Cyberrange — Secure Environment",
+  "title": "IoT Cyberrange — Secure Environment",
     "tags": ["iot", "secure", "cyberrange"],
     "timezone": "browser",
     "refresh": "5s",
     "time": {"from": "now-15m", "to": "now"},
     "schemaVersion": 42,
-    "uid": "secure-iot-v2",
+    "uid": "gq9g9l",
     "version": 2,
     "panels": [
 
@@ -374,7 +373,4 @@
       }
 
     ]
-  },
-  "overwrite": true,
-  "folderId": 0
 }
