@@ -112,7 +112,8 @@ def flood_worker(worker_id):
         payload = json.dumps({"w": worker_id, "data": FLOOD_PAYLOAD})
         for i in range(MSGS_PER_CLIENT):
             client.publish(FLOOD_TOPIC, payload, qos=0)
-            if i % 100 == 0:
+            time.sleep(0.005)   # 5 ms between publishes → flood lasts ~10s per worker,
+            if i % 100 == 0:    # ensuring overlap with the campaign measurement window
                 with lock:
                     messages_sent[0] += 100
 
