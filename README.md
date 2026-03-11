@@ -19,6 +19,7 @@ Developed as part of a Master's thesis in Computer Engineering (Cybersecurity & 
 - [Suricata IDS](#suricata-ids)
 - [Running Attack Campaigns](#running-attack-campaigns)
 - [Attack Scenarios](#attack-scenarios)
+- [MITRE ATT&CK for ICS Mapping](#mitre-attck-for-ics-mapping)
 - [Metrics & Results](#metrics--results)
 - [Troubleshooting](#troubleshooting)
 
@@ -363,7 +364,7 @@ Rules are located in `secure/suricata/rules/iot-cyberrange.rules`. All rules ope
 
 ## Running Attack Campaigns
 
-The campaign orchestrator runs all 5 attack scenarios sequentially, collecting metrics before, during, and after each attack.
+The campaign orchestrator runs all 6 attack scenarios sequentially, collecting metrics before, during, and after each attack.
 
 ### Full campaign
 
@@ -381,6 +382,33 @@ python3 metrics/run_campaign.py --env secure
 python3 metrics/run_campaign.py --env insecure --scenario 3
 python3 metrics/run_campaign.py --env secure --scenario 5
 ```
+
+### Multi-run statistical analysis
+
+Run N independent campaigns and get aggregated statistics (mean, standard deviation, 95% confidence interval via t-distribution):
+
+```bash
+# 5 independent runs on insecure environment
+python3 metrics/run_campaign.py --env insecure --runs 5
+
+# 5 independent runs on secure environment
+python3 metrics/run_campaign.py --env secure --runs 5
+```
+
+Each run clears InfluxDB at the start to ensure independence. Outputs:
+- `campaign_<env>_<timestamp>_run<n>.json` — raw results for each run
+- `campaign_<env>_<timestamp>_stats.json` — aggregated statistics
+- `campaign_<env>_<timestamp>_stats.csv` — aggregated statistics (CSV)
+
+Aggregated metrics per scenario:
+
+| Metric | Description |
+|---|---|
+| `latency_avg_ms` | Mean ± std of MQTT round-trip latency, baseline and under attack |
+| `throughput_msg_s` | Mean ± std of message throughput |
+| `ttd_mean` / `ttd_std` | Time-to-detect statistics (secure env only) |
+| `ttd_detection_rate` | Fraction of runs where Suricata detected the attack |
+| `anomalies_mean` | Mean anomalous readings detected (S2 only) |
 
 ### Output
 
@@ -469,6 +497,56 @@ docker exec secure_attacker bash scripts/05_lateral_movement.sh
 
 **Insecure result:** 3 services compromised (Node-RED, InfluxDB, Grafana); 908 sensor records exfiltrated.
 **Secure result:** Network segmentation blocks all cross-subnet access; 0 services reached.
+
+---
+
+### S6 — Replay Attack
+
+Captures legitimate sensor messages via anonymous subscription, then replays them in rapid bursts to flood the broker with duplicate historical data. Unlike injection (S2), replayed values are always within normal bounds — bypassing threshold-based anomaly detection.
+
+```bash
+docker exec insecure_attacker python3 scripts/06_replay.py
+docker exec secure_attacker python3 scripts/06_replay.py
+```
+
+**Insecure result:** ~10–20× throughput spike; InfluxDB flooded with duplicate sensor readings; data timeline integrity violated.
+**Secure result:** All 6 authentication attempts refused (anonymous + common credentials); 0 messages captured or replayed; Suricata detects rapid connection burst.
+
+---
+
+## MITRE ATT&CK for ICS Mapping
+
+Each attack scenario is mapped to the [MITRE ATT&CK for ICS](https://attack.mitre.org/matrices/ics/) framework (v15), which provides a standardised taxonomy of adversarial techniques targeting Industrial Control Systems and cyber-physical environments.
+
+| Scenario | Attack Vector | Tactic | Technique | Secure Countermeasure | IDS Rule |
+|---|---|---|---|---|---|
+| **S1** — Eavesdropping | Passive MQTT traffic capture; anonymous subscription to `sensors/#` | Collection (TA0100) | [T0842 — Network Sniffing](https://attack.mitre.org/techniques/T0842/) | TLS 1.2 encrypts all traffic; 0 messages readable | Preventive (no post-fact detection) |
+| **S2** — Message Injection | Forged sensor readings published to `sensors/#`; unauthorized actuator commands on `commands/#` | Impair Process Control (TA0106) | [T0856 — Spoof Reporting Message](https://attack.mitre.org/techniques/T0856/) | MQTT authentication + per-user ACL blocks unauthenticated publish | SID 1000002 (repeated failed connections) |
+| **S3** — Denial of Service | Subscription amplification flood: 50 concurrent workers saturate broker routing capacity | Inhibit Response Function (TA0107) | [T0814 — Denial of Service](https://attack.mitre.org/techniques/T0814/) | `max_connections=20` + `max_inflight_messages=10` caps attack surface | SID 1000003 (SYN flood), SID 1000004 (connection rate) |
+| **S4** — Brute Force | Dictionary attack on MQTT credentials; credential reuse from S1 harvested data | Initial Access (TA0108) | [T0859 — Valid Accounts](https://attack.mitre.org/techniques/T0859/) | Strong per-device credentials; anonymous access disabled; TLS prevents S1 harvest | SID 1000005 (rapid reconnects) |
+| **S5** — Lateral Movement | Port scan of IoT subnet; pivot to data pipeline services (Node-RED :1880, InfluxDB :8086, Grafana :3001) | Lateral Movement (TA0109) | [T0886 — Remote Services](https://attack.mitre.org/techniques/T0886/) | Three isolated subnets (`internal: true`); no cross-subnet routing | SID 1000006 (port scan), SID 1000007–1000009 (cross-subnet access) |
+| **S6** — Replay Attack | Captured sensor messages republished in bulk to flood broker with duplicate historical data | Impair Process Control (TA0106) | [T0856 — Spoof Reporting Message](https://attack.mitre.org/techniques/T0856/) | Authentication blocks anonymous replay; TLS prevents passive payload capture | SID 1000010 (rapid connection burst) |
+
+### Detection vs. Prevention
+
+Not all techniques are detectable after the fact — some are blocked at the architectural level before Suricata can observe them:
+
+| Scenario | Security Posture | TTD |
+|---|---|---|
+| S1 — Eavesdropping | **Preventive** — TLS makes captured traffic unreadable | N/A |
+| S2 — Message Injection | **Preventive** — broker rejects unauthenticated publish | N/A |
+| S3 — Denial of Service | **Detective + Mitigative** — rate limiting reduces blast radius; IDS alerts on flood | Measured (seconds) |
+| S4 — Brute Force | **Detective** — IDS detects rapid reconnect pattern; credentials not compromised | Measured (seconds) |
+| S5 — Lateral Movement | **Preventive + Detective** — segmentation blocks pivot; IDS alerts on scan and cross-subnet probe | Measured (seconds) |
+| S6 — Replay Attack | **Preventive + Detective** — authentication blocks anonymous replay; IDS detects connection burst | Measured (seconds) |
+
+### Compliance Reference
+
+This mapping supports alignment with the following standards:
+
+- **IEC 62443-3-3** (System Security Requirements): SR 3.1 (Communication Integrity), SR 3.4 (Software and Information Integrity), SR 5.1 (Network Segmentation)
+- **NIST SP 800-82r3** (Guide to OT Security): network segmentation, encryption in transit, least-privilege access control
+- **ENISA IoT Security Guidelines** (2023): device authentication, transport security, network monitoring
 
 ---
 
