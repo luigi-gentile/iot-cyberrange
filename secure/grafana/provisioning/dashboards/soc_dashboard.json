@@ -6,7 +6,7 @@
   "time": {"from": "now-3h", "to": "now"},
   "schemaVersion": 42,
   "uid": "soc-v1",
-  "version": 1,
+  "version": 2,
   "panels": [
 
     {
@@ -15,7 +15,7 @@
       "title": "",
       "gridPos": {"h": 2, "w": 24, "x": 0, "y": 0},
       "options": {
-        "content": "# 🛡️ SECURITY OPERATIONS CENTER — Secure Environment\nSuricata IDS alerts &nbsp;·&nbsp; Multi-stage correlation engine &nbsp;·&nbsp; Real-time threat monitoring",
+        "content": "## SECURITY OPERATIONS CENTER — Secure Environment\nSuricata IDS real-time alerts &nbsp;·&nbsp; Multi-stage correlation engine &nbsp;·&nbsp; Live threat monitoring",
         "mode": "markdown"
       }
     },
@@ -32,14 +32,15 @@
       }],
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "fixed", "fixedColor": "red"},
+          "color": {"mode": "thresholds"},
           "unit": "short",
           "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {"color": "green", "value": null},
-              {"color": "yellow", "value": 10},
+              {"color": "yellow", "value": 5},
+              {"color": "orange", "value": 20},
               {"color": "red", "value": 50}
             ]
           }
@@ -69,15 +70,16 @@
       }],
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "color": {"mode": "thresholds"},
           "unit": "short",
           "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {"color": "green", "value": null},
-              {"color": "orange", "value": 3},
-              {"color": "red", "value": 5}
+              {"color": "yellow", "value": 3},
+              {"color": "orange", "value": 5},
+              {"color": "red", "value": 6}
             ]
           }
         },
@@ -151,7 +153,8 @@
             "steps": [
               {"color": "green", "value": null},
               {"color": "yellow", "value": 1},
-              {"color": "red", "value": 10}
+              {"color": "orange", "value": 5},
+              {"color": "red", "value": 15}
             ]
           }
         },
@@ -183,7 +186,7 @@
           "color": {"mode": "palette-classic"},
           "custom": {
             "lineWidth": 2,
-            "fillOpacity": 15,
+            "fillOpacity": 20,
             "drawStyle": "bars",
             "barAlignment": 0,
             "pointSize": 5,
@@ -196,8 +199,8 @@
         "overrides": []
       },
       "options": {
-        "tooltip": {"mode": "multi", "sort": "none"},
-        "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true, "calcs": ["sum"]}
       }
     },
 
@@ -225,7 +228,7 @@
         "overrides": []
       },
       "options": {
-        "barRadius": 0.1,
+        "barRadius": 0.05,
         "barWidth": 0.6,
         "groupWidth": 0.7,
         "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true},
@@ -241,11 +244,11 @@
     {
       "id": 37,
       "type": "table",
-      "title": "Recent Alerts (last 20)",
-      "gridPos": {"h": 9, "w": 14, "x": 0, "y": 14},
+      "title": "Recent IDS Alerts",
+      "gridPos": {"h": 10, "w": 14, "x": 0, "y": 14},
       "targets": [{
         "datasource": {"type": "influxdb"},
-        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"suricata_alert\" and r._field == \"count\") |> keep(columns: [\"_time\", \"scenario\", \"sid\", \"signature\", \"src_ip\"]) |> sort(columns: [\"_time\"], desc: true) |> limit(n: 20)",
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"suricata_alert\" and r._field == \"count\") |> group() |> sort(columns: [\"_time\"], desc: true) |> limit(n: 25) |> keep(columns: [\"_time\", \"scenario\", \"sid\", \"src_ip\", \"signature\"])",
         "refId": "A"
       }],
       "fieldConfig": {
@@ -254,12 +257,12 @@
           "custom": {
             "align": "left",
             "cellOptions": {"type": "auto"},
-            "filterable": false,
+            "filterable": true,
             "inspect": false
           },
           "thresholds": {
             "mode": "absolute",
-            "steps": [{"color": "green", "value": null}]
+            "steps": [{"color": "text", "value": null}]
           }
         },
         "overrides": [
@@ -275,15 +278,28 @@
             "properties": [
               {"id": "displayName", "value": "Scenario"},
               {"id": "custom.width", "value": 90},
-              {"id": "custom.cellOptions", "value": {"type": "color-text"}},
-              {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "basic"}},
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "text"}},
+              {"id": "mappings", "value": [
+                {
+                  "type": "value",
+                  "options": {
+                    "S1": {"color": "blue",       "text": "S1", "index": 0},
+                    "S2": {"color": "purple",     "text": "S2", "index": 1},
+                    "S3": {"color": "yellow",     "text": "S3", "index": 2},
+                    "S4": {"color": "orange",     "text": "S4", "index": 3},
+                    "S5": {"color": "red",        "text": "S5", "index": 4},
+                    "S6": {"color": "dark-red",   "text": "S6", "index": 5}
+                  }
+                }
+              ]}
             ]
           },
           {
             "matcher": {"id": "byName", "options": "sid"},
             "properties": [
               {"id": "displayName", "value": "SID"},
-              {"id": "custom.width", "value": 80}
+              {"id": "custom.width", "value": 85}
             ]
           },
           {
@@ -295,21 +311,21 @@
           },
           {
             "matcher": {"id": "byName", "options": "signature"},
-            "properties": [{"id": "displayName", "value": "Signature"}]
+            "properties": [
+              {"id": "displayName", "value": "Alert Description"},
+              {"id": "custom.minWidth", "value": 200}
+            ]
           }
         ]
       },
       "options": {
-        "cellHeight": "sm",
+        "cellHeight": "md",
         "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false},
         "showHeader": true,
-        "sortBy": []
+        "sortBy": [{"desc": true, "displayName": "Time"}]
       },
       "transformations": [
-        {
-          "id": "sortBy",
-          "options": {"fields": [{"desc": true, "displayName": "Time"}]}
-        }
+        {"id": "merge", "options": {}}
       ]
     },
 
@@ -317,10 +333,10 @@
       "id": 38,
       "type": "table",
       "title": "Correlation Events",
-      "gridPos": {"h": 9, "w": 10, "x": 14, "y": 14},
+      "gridPos": {"h": 10, "w": 10, "x": 14, "y": 14},
       "targets": [{
         "datasource": {"type": "influxdb"},
-        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"soc_event\") |> filter(fn:(r) => r._field == \"description\") |> keep(columns: [\"_time\", \"type\", \"severity\", \"scenarios\", \"_value\"]) |> rename(columns: {\"_value\": \"description\"}) |> sort(columns: [\"_time\"], desc: true)",
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"soc_event\" and r._field == \"description\") |> group() |> sort(columns: [\"_time\"], desc: true) |> keep(columns: [\"_time\", \"severity\", \"type\", \"scenarios\", \"_value\"]) |> rename(columns: {\"_value\": \"description\"})",
         "refId": "A"
       }],
       "fieldConfig": {
@@ -334,7 +350,7 @@
           },
           "thresholds": {
             "mode": "absolute",
-            "steps": [{"color": "green", "value": null}]
+            "steps": [{"color": "text", "value": null}]
           }
         },
         "overrides": [
@@ -342,28 +358,33 @@
             "matcher": {"id": "byName", "options": "_time"},
             "properties": [
               {"id": "displayName", "value": "Time"},
-              {"id": "custom.width", "value": 160}
-            ]
-          },
-          {
-            "matcher": {"id": "byName", "options": "type"},
-            "properties": [
-              {"id": "displayName", "value": "Type"},
-              {"id": "custom.width", "value": 150},
-              {"id": "custom.cellOptions", "value": {"type": "color-text"}},
-              {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}
+              {"id": "custom.width", "value": 170}
             ]
           },
           {
             "matcher": {"id": "byName", "options": "severity"},
             "properties": [
               {"id": "displayName", "value": "Severity"},
-              {"id": "custom.width", "value": 90},
+              {"id": "custom.width", "value": 95},
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "basic"}},
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "text"}},
               {"id": "mappings", "value": [
-                {"options": {"CRITICAL": {"color": "red",    "index": 0}}, "type": "value"},
-                {"options": {"HIGH":     {"color": "orange", "index": 1}}, "type": "value"}
-              ]},
-              {"id": "custom.cellOptions", "value": {"type": "color-background"}}
+                {
+                  "type": "value",
+                  "options": {
+                    "CRITICAL": {"color": "red",    "text": "CRITICAL", "index": 0},
+                    "HIGH":     {"color": "orange", "text": "HIGH",     "index": 1},
+                    "MEDIUM":   {"color": "yellow", "text": "MEDIUM",   "index": 2}
+                  }
+                }
+              ]}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "type"},
+            "properties": [
+              {"id": "displayName", "value": "Rule"},
+              {"id": "custom.width", "value": 155}
             ]
           },
           {
@@ -375,21 +396,21 @@
           },
           {
             "matcher": {"id": "byName", "options": "description"},
-            "properties": [{"id": "displayName", "value": "Description"}]
+            "properties": [
+              {"id": "displayName", "value": "Description"},
+              {"id": "custom.minWidth", "value": 180}
+            ]
           }
         ]
       },
       "options": {
-        "cellHeight": "sm",
+        "cellHeight": "md",
         "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false},
         "showHeader": true,
-        "sortBy": []
+        "sortBy": [{"desc": true, "displayName": "Time"}]
       },
       "transformations": [
-        {
-          "id": "sortBy",
-          "options": {"fields": [{"desc": true, "displayName": "Time"}]}
-        }
+        {"id": "merge", "options": {}}
       ]
     }
 
