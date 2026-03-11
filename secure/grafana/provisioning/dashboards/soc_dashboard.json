@@ -1,0 +1,397 @@
+{
+  "title": "IoT Cyberrange — SOC Dashboard",
+  "tags": ["iot", "secure", "soc", "cyberrange"],
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": {"from": "now-3h", "to": "now"},
+  "schemaVersion": 42,
+  "uid": "soc-v1",
+  "version": 1,
+  "panels": [
+
+    {
+      "id": 30,
+      "type": "text",
+      "title": "",
+      "gridPos": {"h": 2, "w": 24, "x": 0, "y": 0},
+      "options": {
+        "content": "# 🛡️ SECURITY OPERATIONS CENTER — Secure Environment\nSuricata IDS alerts &nbsp;·&nbsp; Multi-stage correlation engine &nbsp;·&nbsp; Real-time threat monitoring",
+        "mode": "markdown"
+      }
+    },
+
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "Total IDS Alerts",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 2},
+      "targets": [{
+        "datasource": {"type": "influxdb"},
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"suricata_alert\" and r._field == \"count\") |> group() |> count()",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "red"},
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 10},
+              {"color": "red", "value": 50}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "Scenarios Detected",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 2},
+      "targets": [{
+        "datasource": {"type": "influxdb"},
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"suricata_alert\" and r._field == \"count\") |> group(columns:[\"scenario\"]) |> first() |> group() |> count()",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "fixed", "fixedColor": "orange"},
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 3},
+              {"color": "red", "value": 5}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+
+    {
+      "id": 33,
+      "type": "stat",
+      "title": "SOC Correlations",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 2},
+      "targets": [{
+        "datasource": {"type": "influxdb"},
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"soc_event\" and r._field == \"count\") |> group() |> count()",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 1},
+              {"color": "red", "value": 3}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+
+    {
+      "id": 34,
+      "type": "stat",
+      "title": "Active (last 5 min)",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 2},
+      "targets": [{
+        "datasource": {"type": "influxdb"},
+        "query": "from(bucket:\"sensors\") |> range(start: -5m) |> filter(fn:(r) => r._measurement == \"suricata_alert\" and r._field == \"count\") |> group() |> count()",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "Alert Timeline by Scenario",
+      "gridPos": {"h": 8, "w": 14, "x": 0, "y": 6},
+      "targets": [{
+        "datasource": {"type": "influxdb"},
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"suricata_alert\" and r._field == \"count\") |> aggregateWindow(every: 30s, fn: sum, createEmpty: false) |> group(columns: [\"scenario\"])",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "drawStyle": "bars",
+            "barAlignment": 0,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {"mode": "none", "group": "A"}
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}
+      }
+    },
+
+    {
+      "id": 36,
+      "type": "barchart",
+      "title": "Alerts by Scenario",
+      "gridPos": {"h": 8, "w": 10, "x": 14, "y": 6},
+      "targets": [{
+        "datasource": {"type": "influxdb"},
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"suricata_alert\" and r._field == \"count\") |> group(columns: [\"scenario\"]) |> sum() |> group()",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineWidth": 1
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "barRadius": 0.1,
+        "barWidth": 0.6,
+        "groupWidth": 0.7,
+        "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true},
+        "orientation": "auto",
+        "stacking": "none",
+        "tooltip": {"mode": "single", "sort": "none"},
+        "xField": "scenario",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      }
+    },
+
+    {
+      "id": 37,
+      "type": "table",
+      "title": "Recent Alerts (last 20)",
+      "gridPos": {"h": 9, "w": 14, "x": 0, "y": 14},
+      "targets": [{
+        "datasource": {"type": "influxdb"},
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"suricata_alert\" and r._field == \"count\") |> keep(columns: [\"_time\", \"scenario\", \"sid\", \"signature\", \"src_ip\"]) |> sort(columns: [\"_time\"], desc: true) |> limit(n: 20)",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {
+            "align": "left",
+            "cellOptions": {"type": "auto"},
+            "filterable": false,
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "_time"},
+            "properties": [
+              {"id": "displayName", "value": "Time"},
+              {"id": "custom.width", "value": 180}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "scenario"},
+            "properties": [
+              {"id": "displayName", "value": "Scenario"},
+              {"id": "custom.width", "value": 90},
+              {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "sid"},
+            "properties": [
+              {"id": "displayName", "value": "SID"},
+              {"id": "custom.width", "value": 80}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "src_ip"},
+            "properties": [
+              {"id": "displayName", "value": "Source IP"},
+              {"id": "custom.width", "value": 130}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "signature"},
+            "properties": [{"id": "displayName", "value": "Signature"}]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false},
+        "showHeader": true,
+        "sortBy": []
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {"fields": [{"desc": true, "displayName": "Time"}]}
+        }
+      ]
+    },
+
+    {
+      "id": 38,
+      "type": "table",
+      "title": "Correlation Events",
+      "gridPos": {"h": 9, "w": 10, "x": 14, "y": 14},
+      "targets": [{
+        "datasource": {"type": "influxdb"},
+        "query": "from(bucket:\"sensors\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn:(r) => r._measurement == \"soc_event\") |> filter(fn:(r) => r._field == \"description\") |> keep(columns: [\"_time\", \"type\", \"severity\", \"scenarios\", \"_value\"]) |> rename(columns: {\"_value\": \"description\"}) |> sort(columns: [\"_time\"], desc: true)",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {
+            "align": "left",
+            "cellOptions": {"type": "auto"},
+            "filterable": false,
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "_time"},
+            "properties": [
+              {"id": "displayName", "value": "Time"},
+              {"id": "custom.width", "value": 160}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "type"},
+            "properties": [
+              {"id": "displayName", "value": "Type"},
+              {"id": "custom.width", "value": 150},
+              {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "severity"},
+            "properties": [
+              {"id": "displayName", "value": "Severity"},
+              {"id": "custom.width", "value": 90},
+              {"id": "mappings", "value": [
+                {"options": {"CRITICAL": {"color": "red",    "index": 0}}, "type": "value"},
+                {"options": {"HIGH":     {"color": "orange", "index": 1}}, "type": "value"}
+              ]},
+              {"id": "custom.cellOptions", "value": {"type": "color-background"}}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "scenarios"},
+            "properties": [
+              {"id": "displayName", "value": "Scenarios"},
+              {"id": "custom.width", "value": 90}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "description"},
+            "properties": [{"id": "displayName", "value": "Description"}]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false},
+        "showHeader": true,
+        "sortBy": []
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {"fields": [{"desc": true, "displayName": "Time"}]}
+        }
+      ]
+    }
+
+  ]
+}

@@ -175,6 +175,25 @@ services:
       - influxdb
     restart: unless-stopped
 
+  soc_bridge:
+    build:
+      context: ./soc
+    container_name: secure_soc_bridge
+    environment:
+      - INFLUXDB_URL=http://172.22.0.30:8086
+      - INFLUXDB_TOKEN=secure-admin-token-abc123xyz987
+      - INFLUXDB_ORG=iot-cyberrange
+      - INFLUXDB_BUCKET=sensors
+      - EVE_LOG=/var/log/suricata/eve.json
+    volumes:
+      - ./suricata/logs:/var/log/suricata:ro
+    networks:
+      data_pipeline:
+        ipv4_address: 172.22.0.40
+    depends_on:
+      - influxdb
+    restart: unless-stopped
+
   attacker:
     build:
       context: ../insecure/attacker
