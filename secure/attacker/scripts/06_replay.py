@@ -28,6 +28,7 @@ import os
 import ssl
 import sys
 import time
+import threading
 import paho.mqtt.client as mqtt
 
 BROKER  = os.getenv("BROKER_HOST", "172.21.0.20")
@@ -45,14 +46,38 @@ CREDS = [
 ]
 
 
-def _build_client(client_id: str, user: str | None, pwd: str | None) -> mqtt.Client:
-    """Build a TLS-configured MQTT client."""
+def _try_connect(client_id: str, user: str | None, pwd: str | None) -> bool:
+    """
+    Attempt a single authenticated connection.
+    Returns True only if the broker sends CONNACK rc=0 (Success).
+    Uses on_connect callback to detect auth failures that paho v2 does
+    not surface as exceptions (rc != 0 → CONNACK refused).
+    """
+    auth_result = [None]   # None = not yet known, True = accepted, False = refused
+    event = threading.Event()
+
+    def on_connect(client, userdata, flags, reason_code, properties):
+        # reason_code is a ReasonCode object in paho v2
+        auth_result[0] = not reason_code.is_failure
+        event.set()
+
     c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id)
     c.tls_set(ca_certs=CA_CERT, tls_version=ssl.PROTOCOL_TLS_CLIENT)
     c.tls_insecure_set(False)
     if user is not None:
         c.username_pw_set(user, pwd)
-    return c
+    c.on_connect = on_connect
+
+    try:
+        c.connect(BROKER, PORT, keepalive=10)
+        c.loop_start()
+        event.wait(timeout=3.0)   # wait for CONNACK
+        c.loop_stop()
+        c.disconnect()
+    except Exception:
+        return False
+
+    return auth_result[0] is True
 
 
 print(f"[*] Target : {BROKER}:{PORT}  (TLS, authentication enforced)")
@@ -62,21 +87,14 @@ connected = False
 
 for i, (user, pwd) in enumerate(CREDS, 1):
     label = f"{user}:{pwd}" if user else "anonymous"
-    try:
-        c = _build_client(f"replay_attempt_{i}", user, pwd)
-        c.connect(BROKER, PORT, keepalive=10)
-        c.loop_start()
-        time.sleep(1.2)
-        c.loop_stop()
-        c.disconnect()
-        # If we reach here without exception, connection succeeded (unexpected)
+    if _try_connect(f"replay_attempt_{i}", user, pwd):
         print(f"[?] Attempt {i:02d} ({label}) — accepted (unexpected!)")
         connected = True
         break
-    except Exception as e:
-        print(f"[-] Attempt {i:02d} ({label}) — refused ({type(e).__name__})")
+    else:
+        print(f"[-] Attempt {i:02d} ({label}) — refused (Not Authorised)")
 
-    time.sleep(0.3)   # small gap between bursts
+    time.sleep(0.3)   # small gap between bursts — triggers Suricata SID 1000010
 
 print()
 
