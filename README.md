@@ -17,6 +17,7 @@ Developed as part of a Master's thesis in Computer Engineering (Cybersecurity & 
   - [Insecure Environment](#insecure-environment)
   - [Secure Environment](#secure-environment)
 - [Suricata IDS](#suricata-ids)
+- [Mini SOC](#mini-soc)
 - [Running Attack Campaigns](#running-attack-campaigns)
 - [Attack Scenarios](#attack-scenarios)
 - [MITRE ATT&CK for ICS Mapping](#mitre-attck-for-ics-mapping)
@@ -36,8 +37,9 @@ The cyber range implements two parallel IoT environments on a single host:
 | **Authorization** | No ACL | Per-user topic ACL |
 | **Network** | Flat — 172.20.0.0/24 | Segmented — 3 subnets |
 | **IDS** | None | Suricata (TTD measurement) |
+| **SOC** | None | Real-time alert pipeline + Grafana SOC dashboard |
 
-Five attack scenarios are executed against both environments by an attacker container, with metrics collected automatically via a campaign orchestrator.
+Six attack scenarios are executed against both environments by an attacker container, with metrics collected automatically via a campaign orchestrator.
 
 ---
 
@@ -61,11 +63,13 @@ SECURE ENVIRONMENT
 │ sensor_temp (172.21.0.10)│  │  InfluxDB (172.22.0.30)  │  │  admin access    │
 │ sensor_door (172.21.0.11)│  │  Node-RED (172.22.0.31)  │  │                  │
 │sensor_power (172.21.0.12)│  │ Grafana  (172.22.0.32)   │  │                  │
-│ broker TLS  (172.21.0.20)│  │                          │  │                  │
+│ broker TLS  (172.21.0.20)│  │ soc_bridge(172.22.0.40)──┼─►│InfluxDB (alerts) │
 │ attacker    (172.21.0.99)│  │                          │  │                  │
 └──────────────────────────┘  └──────────────────────────┘  └──────────────────┘
-          │
-    Suricata IDS (host network, monitors br-<network_id>)
+          │                            ▲
+    Suricata IDS            tails eve.json (volume :ro)
+    (host network,          writes suricata_alert +
+     monitors br-<id>)      soc_event measurements
 ```
 
 ---
@@ -114,7 +118,8 @@ iot-cyberrange/
 │           ├── 02_inject.sh
 │           ├── 03_dos.py
 │           ├── 04_bruteforce.py
-│           └── 05_lateral_movement.sh
+│           ├── 05_lateral_movement.sh
+│           └── 06_replay.py
 │
 ├── secure/
 │   ├── docker-compose.yml
@@ -140,7 +145,15 @@ iot-cyberrange/
 │   │       ├── 02_inject.sh
 │   │       ├── 03_dos.py
 │   │       ├── 04_bruteforce.py
-│   │       └── 05_lateral_movement.sh
+│   │       ├── 05_lateral_movement.sh
+│   │       └── 06_replay.py
+│   ├── soc/
+│   │   ├── Dockerfile
+│   │   └── soc_bridge.py        # Suricata→InfluxDB bridge + correlation engine
+│   ├── grafana/
+│   │   └── provisioning/
+│   │       └── dashboards/
+│   │           └── soc_dashboard.json
 │   └── suricata/
 │       ├── suricata.yaml
 │       ├── start_suricata.sh
@@ -307,10 +320,12 @@ secure_influxdb      Up
 secure_nodered       Up (healthy)
 secure_grafana       Up
 secure_attacker      Up
+secure_soc_bridge    Up
 ```
 
 **Access services** (from management network or via port mapping):
-- Grafana: http://172.23.0.32:3000 (admin/admin)
+- Grafana (sensor dashboards): http://172.23.0.32:3000 (admin/admin)
+- Grafana (SOC dashboard): `http://<host-ip>:3001` (admin/GrafanaAdmin2026) → "IoT Cyberrange — SOC Dashboard"
 - InfluxDB: http://172.22.0.30:8086
 - Node-RED: http://172.23.0.31:1880
 
@@ -359,6 +374,94 @@ Rules are located in `secure/suricata/rules/iot-cyberrange.rules`. All rules ope
 | 1000007 | S5 Lateral movement | Cross-subnet access to data_pipeline |
 | 1000008 | S5 Node-RED access | TCP to port 1880 from IoT subnet |
 | 1000009 | S5 InfluxDB access | TCP to port 8086 from IoT subnet |
+| 1000010 | S6 Replay Attack | Rapid TLS connection burst > 5 in 3s |
+
+---
+
+## Mini SOC
+
+The secure environment includes a lightweight Security Operations Center built on top of Suricata. It consists of a bridge container (`soc_bridge`) that tails Suricata's `eve.json` in real time, writes structured alert data to InfluxDB, runs a correlation engine to detect multi-stage attack chains, and feeds a dedicated Grafana dashboard.
+
+### Architecture
+
+```
+Suricata eve.json  (volume :ro)
+        │
+        ▼
+  secure_soc_bridge (172.22.0.40)
+        │
+        ├─► measurement: suricata_alert   (1 point per IDS alert)
+        │       tags: scenario, sid, src_ip, signature
+        │       field: count=1
+        │
+        └─► measurement: soc_event        (1 point per correlation)
+                tags: type, severity, scenarios
+                fields: count=1, description="..."
+                        │
+                        ▼
+                 InfluxDB → Grafana SOC Dashboard
+```
+
+### InfluxDB data model
+
+**`suricata_alert`** — one point per Suricata alert:
+
+| Tag | Example |
+|---|---|
+| `scenario` | `S4` |
+| `sid` | `1000005` |
+| `src_ip` | `172.21.0.99` |
+| `signature` | `IOT-CYBERRANGE S4 Brute force - rapid TLS reconnects` |
+
+**`soc_event`** — one point per detected attack chain:
+
+| Tag | Example |
+|---|---|
+| `type` | `ATTACK_CHAIN` |
+| `severity` | `CRITICAL` |
+| `scenarios` | `S4+S5` |
+| `description` (field) | `Brute Force followed by Lateral Movement…` |
+
+### Correlation rules
+
+The engine evaluates all three rules on every new alert, using a 5-minute sliding window over `alert_history`:
+
+| Rule | Trigger | Severity | Meaning |
+|---|---|---|---|
+| `ATTACK_CHAIN` | S4 + S5 within 5 min | CRITICAL | Credential brute force followed by lateral movement |
+| `MULTI_VECTOR` | S3 + S4 within 5 min | HIGH | DoS used as distraction while brute-forcing credentials |
+| `RECON_TO_ACTION` | S5 + (S2 or S6) within 5 min | CRITICAL | Lateral movement followed by data manipulation or replay |
+
+Anti-duplication: each rule fires at most once per 5-minute window.
+
+### SOC Grafana dashboard
+
+Access at `http://<host-ip>:3001` — login: `admin` / `GrafanaAdmin2026` — dashboard: **IoT Cyberrange — SOC Dashboard**.
+
+Panels:
+- **Total IDS Alerts** / **Scenarios Detected** / **SOC Correlations** / **Active (last 5 min)** — live KPI stats
+- **Alert Timeline by Scenario** — 30s-window bar chart, one series per scenario
+- **Alerts by Scenario** — aggregated bar chart
+- **Recent IDS Alerts** — scrollable table (last 25 alerts) with timestamp, scenario (color-coded), SID, source IP, full alert description
+- **Correlation Events** — table of detected attack chains with severity (color-coded: CRITICAL=red, HIGH=orange), rule name, scenarios involved, and description
+
+### Monitoring the bridge
+
+```bash
+# Live bridge output
+docker logs -f secure_soc_bridge
+
+# Check InfluxDB data (from within soc_bridge container)
+docker exec secure_soc_bridge python3 -c "
+import requests
+r = requests.post('http://172.22.0.30:8086/api/v2/query?org=iot-cyberrange',
+  headers={'Authorization':'Token secure-admin-token-abc123xyz987',
+           'Content-Type':'application/vnd.flux','Accept':'application/csv'},
+  data='from(bucket:\"sensors\") |> range(start:-1h) |> filter(fn:(r)=> r._measurement==\"suricata_alert\" or r._measurement==\"soc_event\") |> group(columns:[\"_measurement\"]) |> count()',
+  timeout=10)
+print(r.text)
+"
+```
 
 ---
 
@@ -566,9 +669,10 @@ This mapping supports alignment with the following standards:
 |---|---|---|---|
 | S1 Eavesdropping | ~133 msgs captured | 0 msgs captured | Not detected (preventive control) |
 | S2 Injection | 21 msgs injected | 0 msgs injected | Not detected (preventive control) |
-| S3 DoS | +471% latency (50/50 workers) | +98% latency (16/50 workers) | 10.1s |
+| S3 DoS | +471% latency (50/50 workers) | +6% latency (15/50 workers) | 10.1s |
 | S4 Brute Force | 24/24 credentials | 0/12 credentials | 7.2s |
-| S5 Lateral Movement | 3 services breached, 908 records | 0 services reached | 5.0s |
+| S5 Lateral Movement | 3 services breached, 908 records | 0 services reached | 4.9s |
+| S6 Replay Attack | ~17 msg/s burst, data integrity violated | All 6 auth attempts blocked | 4.3s |
 
 ---
 
