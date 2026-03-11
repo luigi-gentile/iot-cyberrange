@@ -15,10 +15,21 @@ containers are restarted between scenarios to reset device state
 Usage:
     python3 metrics/run_campaign.py --env insecure
     python3 metrics/run_campaign.py --env secure
+    python3 metrics/run_campaign.py --env insecure --runs 5
+    python3 metrics/run_campaign.py --env secure   --runs 5
 
-Report output:
+With --runs N > 1, each run is independent (InfluxDB cleared between runs).
+Outputs per-run JSON files and an aggregated statistics file with mean,
+standard deviation, and 95% confidence intervals (t-distribution).
+
+Report output (single run):
     metrics/results/campaign_<env>_<timestamp>.json
     metrics/results/campaign_<env>_<timestamp>.csv
+
+Report output (multi-run):
+    metrics/results/campaign_<env>_<timestamp>_run<n>.json  (one per run)
+    metrics/results/campaign_<env>_<timestamp>_stats.json
+    metrics/results/campaign_<env>_<timestamp>_stats.csv
 """
 
 import subprocess
@@ -26,6 +37,7 @@ import threading
 import argparse
 import json
 import csv
+import math
 import time
 import os
 import requests
@@ -724,39 +736,287 @@ def print_summary(campaign_results: dict):
 
 
 # ──────────────────────────────────────────────
-# Main campaign orchestrator
+# Statistical analysis (multi-run)
 # ──────────────────────────────────────────────
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="IoT Cyberrange - Automated Attack Campaign"
-    )
-    parser.add_argument(
-        "--env",
-        choices=["insecure", "secure"],
-        required=True,
-        help="Target environment"
-    )
+# Two-tailed t-critical values for 95% CI (df = N - 1)
+_T_TABLE = {
+    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776,
+    5: 2.571,  6: 2.447, 7: 2.365, 8: 2.306,
+    9: 2.262, 10: 2.228, 15: 2.131, 20: 2.086,
+    30: 2.042, 60: 2.000,
+}
 
-    args       = parser.parse_args()
-    env_config = ENVIRONMENTS[args.env]
+
+def _t_critical(n: int) -> float:
+    """Return the t-critical value for a 95% two-tailed CI with n observations."""
+    df = n - 1
+    if df <= 0:
+        return float("inf")
+    for k in sorted(_T_TABLE):
+        if df <= k:
+            return _T_TABLE[k]
+    return 1.96  # large sample
+
+
+def compute_stats(values: list) -> dict:
+    """
+    Compute descriptive statistics and 95% confidence interval.
+
+    Args:
+        values: List of numeric values (None entries are ignored)
+
+    Returns:
+        Dict with n, mean, std, ci_95_low, ci_95_high, values
+    """
+    clean = [v for v in values if v is not None]
+    n = len(clean)
+    if n == 0:
+        return {"n": 0, "mean": None, "std": None,
+                "ci_95_low": None, "ci_95_high": None, "values": []}
+    if n == 1:
+        return {"n": 1, "mean": round(clean[0], 4), "std": None,
+                "ci_95_low": None, "ci_95_high": None,
+                "values": [round(clean[0], 4)]}
+
+    mean     = sum(clean) / n
+    variance = sum((v - mean) ** 2 for v in clean) / (n - 1)
+    std      = math.sqrt(variance)
+    margin   = _t_critical(n) * std / math.sqrt(n)
+
+    return {
+        "n":          n,
+        "values":     [round(v, 4) for v in clean],
+        "mean":       round(mean, 4),
+        "std":        round(std, 4),
+        "ci_95_low":  round(mean - margin, 4),
+        "ci_95_high": round(mean + margin, 4),
+    }
+
+
+def aggregate_statistics(all_runs: list, env: str) -> dict:
+    """
+    Aggregate metrics across N campaign runs.
+
+    Args:
+        all_runs: List of campaign_results dicts (one per run)
+        env:      Environment name
+
+    Returns:
+        Aggregated statistics dict
+    """
+    N = len(all_runs)
+    agg = {
+        "environment": env,
+        "runs":        N,
+        "scenarios":   {},
+    }
+
+    for scenario_key in all_runs[0]["scenarios"]:
+        sname = all_runs[0]["scenarios"][scenario_key]["name"]
+        sagg  = {"name": sname}
+
+        for phase in ("baseline", "during_attack"):
+            lat_vals = []
+            thr_vals = []
+            for run in all_runs:
+                snap = run["scenarios"][scenario_key].get(phase, {})
+                lat_vals.append(snap.get("latency",    {}).get("avg_ms"))
+                thr_vals.append(snap.get("throughput", {}).get("messages_per_sec"))
+            sagg[phase] = {
+                "latency_avg_ms":  compute_stats(lat_vals),
+                "throughput_msg_s": compute_stats(thr_vals),
+            }
+
+        # Anomalies (meaningful for S2 only, included for completeness)
+        anom_vals = []
+        for run in all_runs:
+            snap = run["scenarios"][scenario_key].get("during_attack", {})
+            anom_vals.append(
+                snap.get("integrity", {}).get("temperature", {}).get("anomalies")
+            )
+        sagg["anomalies"] = compute_stats(anom_vals)
+
+        # TTD (secure environment only)
+        ttd_raw      = []
+        detected_n   = 0
+        for run in all_runs:
+            ttd = run["scenarios"][scenario_key].get("ttd", {})
+            if ttd.get("detected"):
+                detected_n += 1
+                ttd_raw.append(ttd.get("ttd_seconds"))
+            else:
+                ttd_raw.append(None)
+
+        sagg["ttd"] = {
+            "detected_count":  detected_n,
+            "detection_rate":  round(detected_n / N, 4),
+            **compute_stats([v for v in ttd_raw if v is not None]),
+        }
+
+        agg["scenarios"][scenario_key] = sagg
+
+    return agg
+
+
+def generate_stats_report(agg: dict, env: str, timestamp: str) -> tuple:
+    """
+    Write aggregated statistics to JSON and CSV files.
+
+    Args:
+        agg:       Output of aggregate_statistics()
+        env:       Environment name
+        timestamp: Shared timestamp string for file naming
+
+    Returns:
+        Tuple of (json_path, csv_path)
+    """
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    base = os.path.join(OUTPUT_DIR, f"campaign_{env}_{timestamp}_stats")
+
+    json_path = base + ".json"
+    with open(json_path, "w") as f:
+        json.dump(agg, f, indent=2)
+
+    csv_path = base + ".csv"
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "scenario", "runs",
+            "baseline_lat_mean", "baseline_lat_std",
+            "baseline_lat_ci_low", "baseline_lat_ci_high",
+            "attack_lat_mean",  "attack_lat_std",
+            "attack_lat_ci_low", "attack_lat_ci_high",
+            "baseline_thr_mean", "baseline_thr_std",
+            "attack_thr_mean",   "attack_thr_std",
+            "anomalies_mean", "anomalies_std",
+            "ttd_mean", "ttd_std",
+            "ttd_ci_low", "ttd_ci_high",
+            "ttd_detected_count", "ttd_detection_rate",
+        ])
+
+        for skey, sdata in agg["scenarios"].items():
+            bl  = sdata.get("baseline",      {})
+            atk = sdata.get("during_attack", {})
+            ttd = sdata.get("ttd",  {})
+            anom = sdata.get("anomalies", {})
+
+            bl_lat  = bl.get("latency_avg_ms",   {})
+            atk_lat = atk.get("latency_avg_ms",  {})
+            bl_thr  = bl.get("throughput_msg_s", {})
+            atk_thr = atk.get("throughput_msg_s",{})
+
+            writer.writerow([
+                skey, agg["runs"],
+                bl_lat.get("mean"),  bl_lat.get("std"),
+                bl_lat.get("ci_95_low"), bl_lat.get("ci_95_high"),
+                atk_lat.get("mean"), atk_lat.get("std"),
+                atk_lat.get("ci_95_low"), atk_lat.get("ci_95_high"),
+                bl_thr.get("mean"),  bl_thr.get("std"),
+                atk_thr.get("mean"), atk_thr.get("std"),
+                anom.get("mean"),   anom.get("std"),
+                ttd.get("mean"),    ttd.get("std"),
+                ttd.get("ci_95_low"), ttd.get("ci_95_high"),
+                ttd.get("detected_count"), ttd.get("detection_rate"),
+            ])
+
+    return json_path, csv_path
+
+
+def print_stats_summary(agg: dict):
+    """Print a human-readable aggregated statistics summary."""
+
+    separator(f"AGGREGATED RESULTS ({agg['runs']} RUNS)")
+
+    env       = agg.get("environment", "")
+    is_secure = (env == "secure")
+
+    if is_secure:
+        header = (
+            f"{'Scenario':<22} "
+            f"{'BL lat mean±std':<22} "
+            f"{'ATK lat mean±std':<22} "
+            f"{'TTD mean±std (n/N)'}"
+        )
+    else:
+        header = (
+            f"{'Scenario':<22} "
+            f"{'BL lat mean±std':<22} "
+            f"{'ATK lat mean±std':<22} "
+            f"{'Anomalies mean±std'}"
+        )
+
+    print(header)
+    print("-" * len(header))
+
+    for skey, sdata in agg["scenarios"].items():
+        name = sdata.get("name", skey)
+        label = f"{skey} ({name[:10]})"
+
+        bl_lat  = sdata.get("baseline",      {}).get("latency_avg_ms",  {})
+        atk_lat = sdata.get("during_attack", {}).get("latency_avg_ms",  {})
+        anom    = sdata.get("anomalies", {})
+        ttd     = sdata.get("ttd", {})
+
+        def fmt(d: dict) -> str:
+            m  = d.get("mean")
+            s  = d.get("std")
+            if m is None:
+                return "N/A"
+            if s is None:
+                return f"{m}ms"
+            return f"{m}±{round(s,2)}ms"
+
+        bl_str  = fmt(bl_lat)
+        atk_str = fmt(atk_lat)
+
+        if is_secure:
+            m = ttd.get("mean")
+            s = ttd.get("std")
+            dn = ttd.get("detected_count", 0)
+            N  = agg["runs"]
+            if m is None:
+                ttd_str = f"N/A ({dn}/{N})"
+            elif s is None:
+                ttd_str = f"{m}s ({dn}/{N})"
+            else:
+                ttd_str = f"{m}±{round(s,2)}s ({dn}/{N})"
+            print(f"{label:<22} {bl_str:<22} {atk_str:<22} {ttd_str}")
+        else:
+            m = anom.get("mean")
+            s = anom.get("std")
+            anom_str = f"{m}±{round(s,2)}" if m is not None and s is not None else (str(m) if m is not None else "N/A")
+            print(f"{label:<22} {bl_str:<22} {atk_str:<22} {anom_str}")
+
+    print("")
+
+def _execute_campaign(env_config: dict, env: str, run_num: int, total_runs: int) -> dict:
+    """
+    Execute one full campaign (all 5 scenarios) and return the results dict.
+    InfluxDB data is cleared at the start of every run to ensure independence.
+
+    Args:
+        env_config:  Environment configuration dict
+        env:         Environment name (for labelling)
+        run_num:     Current run index (1-based)
+        total_runs:  Total number of runs
+
+    Returns:
+        campaign_results dict (same structure as before)
+    """
+    run_label = f"RUN {run_num}/{total_runs}" if total_runs > 1 else ""
 
     campaign_results = {
-        "environment": args.env,
+        "environment": env,
+        "run":         run_num,
         "started_at":  datetime.now(timezone.utc).isoformat(),
         "scenarios":   {}
     }
 
-    separator(f"IoT CYBERRANGE — ATTACK CAMPAIGN ({args.env.upper()})")
-
-    # ── Step 0: Ensure environment is up ──────────────────────
-    separator("STEP 0 — Environment Check")
-    setup_environment(env_config)
-
-    # ── Clear old data before starting campaign ───────────────
-    separator("CLEARING OLD DATA")
-    log("[*] Clearing InfluxDB data from previous runs...")
-    headers = {
+    # ── Clear InfluxDB data ────────────────────────────────
+    separator(f"CLEARING DATA  {run_label}".strip())
+    log("[*] Clearing InfluxDB data...")
+    hdrs = {
         "Authorization": f"Token {env_config['influxdb_token']}",
         "Content-Type":  "application/json"
     }
@@ -765,7 +1025,7 @@ def main():
             f"{env_config['influxdb_url']}/api/v2/delete"
             f"?org={env_config['influxdb_org']}"
             f"&bucket={env_config['influxdb_bucket']}",
-            headers=headers,
+            headers=hdrs,
             json={
                 "start": "1970-01-01T00:00:00Z",
                 "stop":  datetime.now(timezone.utc).isoformat()
@@ -773,51 +1033,48 @@ def main():
             timeout=10
         )
         if response.status_code == 204:
-            log("[+] InfluxDB data cleared successfully")
+            log("[+] InfluxDB data cleared")
         else:
             log(f"[-] InfluxDB clear warning: {response.status_code}")
     except Exception as e:
         log(f"[-] InfluxDB clear failed: {e}")
+
     log("[*] Waiting 15s for sensors to publish fresh data...")
     time.sleep(15)
 
-    # ── Run each scenario ──────────────────────────────────────
+    # ── Run each scenario ──────────────────────────────────
     for scenario_num in range(1, 6):
         scenario_name = SCENARIO_NAMES[scenario_num]
         scenario_key  = f"scenario_{scenario_num}"
 
-        separator(f"SCENARIO {scenario_num} — {scenario_name}")
+        sep_title = f"SCENARIO {scenario_num} — {scenario_name}"
+        if total_runs > 1:
+            sep_title += f"  [{run_label}]"
+        separator(sep_title)
 
         scenario_results = {
             "name":   scenario_name,
             "number": scenario_num,
         }
 
-        # Reset only device state between scenarios
         reset_between_scenarios(env_config)
 
-        # Collect baseline before attack (short -2m window = clean pre-attack data)
         log("[*] Collecting baseline metrics...")
         scenario_results["baseline"] = collect_snapshot(env_config, "baseline")
 
-        # Launch attack in background thread
         log(f"[*] Launching Scenario {scenario_num}: {scenario_name}")
-
-        # Record start time BEFORE the attack so the during_attack integrity
-        # query is scoped to this scenario only (no bleed-in from past scenarios).
         scenario_start = datetime.now(timezone.utc).isoformat()
 
         ttd_container = {}
+
         def run_attack_with_ttd():
             result = run_attack(env_config, scenario_num)
             if result:
                 ttd_container["ttd"] = result
+
         attack_thread = threading.Thread(target=run_attack_with_ttd)
         attack_thread.start()
 
-        # Scenario 2 (injection): wait for attack to complete before measuring
-        # so forged data is already in InfluxDB when we check integrity
-        # All other scenarios: measure during attack
         if scenario_num == 2:
             attack_thread.join()
             log(f"[+] Scenario {scenario_num} complete")
@@ -831,22 +1088,89 @@ def main():
             )
             attack_thread.join()
             log(f"[+] Scenario {scenario_num} complete")
+
         if ttd_container.get("ttd"):
             scenario_results["ttd"] = ttd_container["ttd"]
 
         campaign_results["scenarios"][scenario_key] = scenario_results
 
-    # ── Generate report ────────────────────────────────────────
-    separator("GENERATING REPORT")
-
     campaign_results["completed_at"] = datetime.now(timezone.utc).isoformat()
-    json_path, csv_path = generate_report(campaign_results, args.env)
-    print_summary(campaign_results)
+    return campaign_results
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="IoT Cyberrange - Automated Attack Campaign"
+    )
+    parser.add_argument(
+        "--env",
+        choices=["insecure", "secure"],
+        required=True,
+        help="Target environment"
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Number of independent campaign runs for statistical analysis (default: 1)"
+    )
+
+    args       = parser.parse_args()
+    env_config = ENVIRONMENTS[args.env]
+
+    separator(f"IoT CYBERRANGE — ATTACK CAMPAIGN ({args.env.upper()})"
+              + (f"  ×{args.runs} RUNS" if args.runs > 1 else ""))
+
+    # ── Ensure environment is up (once, before all runs) ──
+    separator("STEP 0 — Environment Check")
+    setup_environment(env_config)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # ── Single run: original behaviour ────────────────────
+    if args.runs == 1:
+        campaign_results = _execute_campaign(env_config, args.env, 1, 1)
+
+        separator("GENERATING REPORT")
+        json_path, csv_path = generate_report(campaign_results, args.env)
+        print_summary(campaign_results)
+
+        print("==============================================")
+        print(f" JSON report : {json_path}")
+        print(f" CSV report  : {csv_path}")
+        print("==============================================")
+        return
+
+    # ── Multi-run: aggregate statistics ───────────────────
+    all_runs = []
+    for run_num in range(1, args.runs + 1):
+        separator(f"STARTING RUN {run_num}/{args.runs}")
+        result = _execute_campaign(env_config, args.env, run_num, args.runs)
+        all_runs.append(result)
+
+        # Save individual run result
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        run_path = os.path.join(
+            OUTPUT_DIR,
+            f"campaign_{args.env}_{timestamp}_run{run_num}.json"
+        )
+        with open(run_path, "w") as f:
+            json.dump(result, f, indent=2)
+        log(f"[+] Run {run_num} saved → {run_path}")
+
+    # ── Aggregate and report ───────────────────────────────
+    separator("AGGREGATING STATISTICS")
+    agg = aggregate_statistics(all_runs, args.env)
+    json_path, csv_path = generate_stats_report(agg, args.env, timestamp)
+    print_stats_summary(agg)
 
     print("==============================================")
-    print(f" JSON report : {json_path}")
-    print(f" CSV report  : {csv_path}")
+    print(f" Runs         : {args.runs}")
+    print(f" Stats JSON   : {json_path}")
+    print(f" Stats CSV    : {csv_path}")
     print("==============================================")
+
 
 
 if __name__ == "__main__":

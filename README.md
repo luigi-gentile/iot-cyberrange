@@ -383,6 +383,33 @@ python3 metrics/run_campaign.py --env insecure --scenario 3
 python3 metrics/run_campaign.py --env secure --scenario 5
 ```
 
+### Multi-run statistical analysis
+
+Run N independent campaigns and get aggregated statistics (mean, standard deviation, 95% confidence interval via t-distribution):
+
+```bash
+# 5 independent runs on insecure environment
+python3 metrics/run_campaign.py --env insecure --runs 5
+
+# 5 independent runs on secure environment
+python3 metrics/run_campaign.py --env secure --runs 5
+```
+
+Each run clears InfluxDB at the start to ensure independence. Outputs:
+- `campaign_<env>_<timestamp>_run<n>.json` — raw results for each run
+- `campaign_<env>_<timestamp>_stats.json` — aggregated statistics
+- `campaign_<env>_<timestamp>_stats.csv` — aggregated statistics (CSV)
+
+Aggregated metrics per scenario:
+
+| Metric | Description |
+|---|---|
+| `latency_avg_ms` | Mean ± std of MQTT round-trip latency, baseline and under attack |
+| `throughput_msg_s` | Mean ± std of message throughput |
+| `ttd_mean` / `ttd_std` | Time-to-detect statistics (secure env only) |
+| `ttd_detection_rate` | Fraction of runs where Suricata detected the attack |
+| `anomalies_mean` | Mean anomalous readings detected (S2 only) |
+
 ### Output
 
 Results are saved to `metrics/results/`:
