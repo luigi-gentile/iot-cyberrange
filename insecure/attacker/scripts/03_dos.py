@@ -69,7 +69,7 @@ def latency_monitor():
             send_time[0] = time.time()
             client.publish(LATENCY_TOPIC, "probe", qos=0)
             if not received.wait(timeout=3.0):
-                # Timeout — broker non risponde
+                # Timeout — broker not responding
                 latency_samples.append({"ts": datetime.now().isoformat(),
                                          "ms": 3000, "phase": current_phase[0]})
             time.sleep(0.5)
