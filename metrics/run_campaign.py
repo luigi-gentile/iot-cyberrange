@@ -110,6 +110,7 @@ SCENARIO_NAMES = {
     3: "Denial of Service",
     4: "Brute Force",
     5: "Lateral Movement",
+    6: "Replay Attack",
 }
 
 
@@ -481,14 +482,15 @@ def run_attack(env_config: dict, scenario: int):
 
     Args:
         env_config: Environment configuration dict
-        scenario: Scenario number (1-5)
+        scenario: Scenario number (1-6)
     """
     scripts = {
-        1: ["bash", "scripts/01_eavesdrop.sh"],
-        2: ["bash", "scripts/02_inject.sh"],
+        1: ["bash",    "scripts/01_eavesdrop.sh"],
+        2: ["bash",    "scripts/02_inject.sh"],
         3: ["python3", "scripts/03_dos.py"],
         4: ["python3", "scripts/04_bruteforce.py"],
-        5: ["bash", "scripts/05_lateral_movement.sh"],
+        5: ["bash",    "scripts/05_lateral_movement.sh"],
+        6: ["python3", "scripts/06_replay.py"],
     }
 
     script    = scripts[scenario]
@@ -660,6 +662,19 @@ def _scenario_security_label(scenario_num: int, scenario_data: dict, env: str) -
         # so lateral movement fully succeeds.
         # In secure, encrypted credentials and network segmentation limit access.
         return "COMPROMISED" if env == "insecure" else "OK"
+
+    elif scenario_num == 6:
+        # Replay: insecure broker accepts anonymous publish, allowing the attacker
+        # to flood the broker with duplicate sensor readings. Detected via
+        # throughput spike (attack rate >> baseline rate).
+        # In secure, authentication blocks the replay at connection time.
+        if env == "insecure":
+            base_thr = (base.get("throughput", {}).get("messages_per_sec") or 0)
+            atk_thr  = (snap.get("throughput", {}).get("messages_per_sec") or 0)
+            if base_thr > 0 and atk_thr / base_thr > 3.0:
+                return "COMPROMISED"
+            return "DEGRADED"
+        return "OK"  # auth + TLS prevents replay in secure environment
 
     else:
         return snap.get("integrity", {}).get("temperature", {}).get("integrity", "N/A")
@@ -1043,7 +1058,7 @@ def _execute_campaign(env_config: dict, env: str, run_num: int, total_runs: int)
     time.sleep(15)
 
     # ── Run each scenario ──────────────────────────────────
-    for scenario_num in range(1, 6):
+    for scenario_num in range(1, 7):
         scenario_name = SCENARIO_NAMES[scenario_num]
         scenario_key  = f"scenario_{scenario_num}"
 

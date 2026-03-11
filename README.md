@@ -364,7 +364,7 @@ Rules are located in `secure/suricata/rules/iot-cyberrange.rules`. All rules ope
 
 ## Running Attack Campaigns
 
-The campaign orchestrator runs all 5 attack scenarios sequentially, collecting metrics before, during, and after each attack.
+The campaign orchestrator runs all 6 attack scenarios sequentially, collecting metrics before, during, and after each attack.
 
 ### Full campaign
 
@@ -500,6 +500,20 @@ docker exec secure_attacker bash scripts/05_lateral_movement.sh
 
 ---
 
+### S6 — Replay Attack
+
+Captures legitimate sensor messages via anonymous subscription, then replays them in rapid bursts to flood the broker with duplicate historical data. Unlike injection (S2), replayed values are always within normal bounds — bypassing threshold-based anomaly detection.
+
+```bash
+docker exec insecure_attacker python3 scripts/06_replay.py
+docker exec secure_attacker python3 scripts/06_replay.py
+```
+
+**Insecure result:** ~10–20× throughput spike; InfluxDB flooded with duplicate sensor readings; data timeline integrity violated.
+**Secure result:** All 6 authentication attempts refused (anonymous + common credentials); 0 messages captured or replayed; Suricata detects rapid connection burst.
+
+---
+
 ## MITRE ATT&CK for ICS Mapping
 
 Each attack scenario is mapped to the [MITRE ATT&CK for ICS](https://attack.mitre.org/matrices/ics/) framework (v15), which provides a standardised taxonomy of adversarial techniques targeting Industrial Control Systems and cyber-physical environments.
@@ -511,6 +525,7 @@ Each attack scenario is mapped to the [MITRE ATT&CK for ICS](https://attack.mitr
 | **S3** — Denial of Service | Subscription amplification flood: 50 concurrent workers saturate broker routing capacity | Inhibit Response Function (TA0107) | [T0814 — Denial of Service](https://attack.mitre.org/techniques/T0814/) | `max_connections=20` + `max_inflight_messages=10` caps attack surface | SID 1000003 (SYN flood), SID 1000004 (connection rate) |
 | **S4** — Brute Force | Dictionary attack on MQTT credentials; credential reuse from S1 harvested data | Initial Access (TA0108) | [T0859 — Valid Accounts](https://attack.mitre.org/techniques/T0859/) | Strong per-device credentials; anonymous access disabled; TLS prevents S1 harvest | SID 1000005 (rapid reconnects) |
 | **S5** — Lateral Movement | Port scan of IoT subnet; pivot to data pipeline services (Node-RED :1880, InfluxDB :8086, Grafana :3001) | Lateral Movement (TA0109) | [T0886 — Remote Services](https://attack.mitre.org/techniques/T0886/) | Three isolated subnets (`internal: true`); no cross-subnet routing | SID 1000006 (port scan), SID 1000007–1000009 (cross-subnet access) |
+| **S6** — Replay Attack | Captured sensor messages republished in bulk to flood broker with duplicate historical data | Impair Process Control (TA0106) | [T0856 — Spoof Reporting Message](https://attack.mitre.org/techniques/T0856/) | Authentication blocks anonymous replay; TLS prevents passive payload capture | SID 1000010 (rapid connection burst) |
 
 ### Detection vs. Prevention
 
@@ -523,6 +538,7 @@ Not all techniques are detectable after the fact — some are blocked at the arc
 | S3 — Denial of Service | **Detective + Mitigative** — rate limiting reduces blast radius; IDS alerts on flood | Measured (seconds) |
 | S4 — Brute Force | **Detective** — IDS detects rapid reconnect pattern; credentials not compromised | Measured (seconds) |
 | S5 — Lateral Movement | **Preventive + Detective** — segmentation blocks pivot; IDS alerts on scan and cross-subnet probe | Measured (seconds) |
+| S6 — Replay Attack | **Preventive + Detective** — authentication blocks anonymous replay; IDS detects connection burst | Measured (seconds) |
 
 ### Compliance Reference
 

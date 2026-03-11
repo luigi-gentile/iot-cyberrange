@@ -17,6 +17,7 @@ SCENARIO_KEYWORDS = {
     3: ["S3", "flood", "DoS"],
     4: ["S4", "brute", "Brute"],
     5: ["S5", "lateral", "scan", "Lateral"],
+    6: ["S6", "Replay", "replay"],
 }
 
 def read_alerts(eve_log: str = EVE_LOG) -> list:
