@@ -439,7 +439,110 @@ from(bucket: "{env_config['influxdb_bucket']}")
     return results
 
 
-def collect_snapshot(env_config: dict, label: str, since: str = "-2m") -> dict:
+def collect_docker_stats(env: str) -> dict:
+    """
+    Collect CPU and memory usage for the broker and sensor containers.
+
+    Runs 'docker stats --no-stream' once and parses the output for the four
+    containers that are active in both environments (broker + 3 sensors).
+
+    Args:
+        env: Environment name ('insecure' or 'secure')
+
+    Returns:
+        Dict with broker and per-sensor resource metrics, e.g.:
+        {
+          "broker":  {"cpu_pct": 1.2, "mem_mb": 45.1},
+          "sensors": {"cpu_pct_avg": 0.3, "mem_mb_avg": 18.4,
+                      "detail": {"sensor_temp":  {"cpu_pct": 0.4, "mem_mb": 19.0},
+                                 "sensor_door":  {"cpu_pct": 0.2, "mem_mb": 17.5},
+                                 "sensor_power": {"cpu_pct": 0.3, "mem_mb": 18.8}}}
+        }
+    """
+    containers = [
+        f"{env}_broker",
+        f"{env}_sensor_temp",
+        f"{env}_sensor_door",
+        f"{env}_sensor_power",
+    ]
+
+    def parse_mem_mb(mem_str: str) -> float:
+        """Parse MemUsage left-hand side (e.g. '10MiB', '1.2GiB') to MB."""
+        s = mem_str.strip().split("/")[0].strip()
+        try:
+            if "GiB" in s:
+                return round(float(s.replace("GiB", "").strip()) * 1024, 2)
+            if "MiB" in s:
+                return round(float(s.replace("MiB", "").strip()), 2)
+            if "GB" in s:
+                return round(float(s.replace("GB", "").strip()) * 1024, 2)
+            if "MB" in s:
+                return round(float(s.replace("MB", "").strip()), 2)
+            if "KiB" in s or "kB" in s:
+                val = float(s.replace("KiB", "").replace("kB", "").strip())
+                return round(val / 1024, 2)
+            if "B" in s:
+                return round(float(s.replace("B", "").strip()) / (1024 * 1024), 2)
+        except (ValueError, AttributeError):
+            pass
+        return 0.0
+
+    raw = {}
+    try:
+        result = subprocess.run(
+            ["docker", "stats", "--no-stream", "--format", "{{json .}}"] + containers,
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        for line in result.stdout.strip().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                name = obj.get("Name", "")
+                cpu_str = obj.get("CPUPerc", "0%").replace("%", "").strip()
+                mem_str = obj.get("MemUsage", "0B / 0B")
+                raw[name] = {
+                    "cpu_pct": round(float(cpu_str), 2),
+                    "mem_mb":  parse_mem_mb(mem_str),
+                }
+            except (json.JSONDecodeError, ValueError):
+                continue
+    except Exception as e:
+        return {"error": str(e)}
+
+    broker_key = f"{env}_broker"
+    broker = raw.get(broker_key, {"cpu_pct": None, "mem_mb": None})
+
+    sensor_keys = {
+        "sensor_temp":  f"{env}_sensor_temp",
+        "sensor_door":  f"{env}_sensor_door",
+        "sensor_power": f"{env}_sensor_power",
+    }
+
+    sensor_detail = {}
+    cpu_vals, mem_vals = [], []
+    for short, full in sensor_keys.items():
+        entry = raw.get(full, {"cpu_pct": None, "mem_mb": None})
+        sensor_detail[short] = entry
+        if entry.get("cpu_pct") is not None:
+            cpu_vals.append(entry["cpu_pct"])
+        if entry.get("mem_mb") is not None:
+            mem_vals.append(entry["mem_mb"])
+
+    sensors_avg = {
+        "cpu_pct_avg": round(sum(cpu_vals) / len(cpu_vals), 2) if cpu_vals else None,
+        "mem_mb_avg":  round(sum(mem_vals) / len(mem_vals), 2) if mem_vals else None,
+        "detail":      sensor_detail,
+    }
+
+    return {"broker": broker, "sensors": sensors_avg}
+
+
+def collect_snapshot(env_config: dict, label: str, since: str = "-2m",
+                     env: str = "") -> dict:
     """
     Collect a complete metrics snapshot at a given point in time.
 
@@ -448,6 +551,8 @@ def collect_snapshot(env_config: dict, label: str, since: str = "-2m") -> dict:
         label:      Label for this snapshot (e.g. 'baseline', 'during_attack')
         since:      Passed to check_data_integrity — limits the integrity query
                     to data after this time so previous scenarios don't bleed in.
+        env:        Environment name ('insecure' or 'secure') used to collect
+                    Docker resource stats for the broker and sensor containers.
 
     Returns:
         Dict with all metrics
@@ -455,18 +560,23 @@ def collect_snapshot(env_config: dict, label: str, since: str = "-2m") -> dict:
     log(f"[*] Collecting metrics snapshot: {label}")
 
     snapshot = {
-        "label":      label,
-        "timestamp":  datetime.now(timezone.utc).isoformat(),
-        "latency":    measure_latency(env_config),
-        "throughput": measure_throughput(env_config),
-        "services":   measure_services(env_config),
-        "integrity":  check_data_integrity(env_config, since=since),
+        "label":        label,
+        "timestamp":    datetime.now(timezone.utc).isoformat(),
+        "latency":      measure_latency(env_config),
+        "throughput":   measure_throughput(env_config),
+        "services":     measure_services(env_config),
+        "integrity":    check_data_integrity(env_config, since=since),
+        "docker_stats": collect_docker_stats(env) if env else {},
     }
 
+    ds = snapshot["docker_stats"]
+    broker_cpu = ds.get("broker", {}).get("cpu_pct", "N/A")
+    broker_mem = ds.get("broker", {}).get("mem_mb", "N/A")
     log(
         f"[+] Snapshot '{label}' — "
         f"latency: {snapshot['latency'].get('avg_ms', 'N/A')}ms | "
-        f"throughput: {snapshot['throughput'].get('messages_per_sec', 'N/A')} msg/s"
+        f"throughput: {snapshot['throughput'].get('messages_per_sec', 'N/A')} msg/s | "
+        f"broker CPU: {broker_cpu}% MEM: {broker_mem}MB"
     )
 
     return snapshot
@@ -567,6 +677,10 @@ def generate_report(campaign_results: dict, env: str) -> tuple:
             "ttd_seconds",
             "ttd_detected",
             "ttd_alert_count",
+            "broker_cpu_pct",
+            "broker_mem_mb",
+            "sensors_cpu_avg_pct",
+            "sensors_mem_avg_mb",
         ])
 
         for scenario_key, scenario_data in campaign_results["scenarios"].items():
@@ -580,6 +694,7 @@ def generate_report(campaign_results: dict, env: str) -> tuple:
                 thr  = snap.get("throughput", {})
                 svc  = snap.get("services", {})
                 intg = snap.get("integrity", {})
+                ds   = snap.get("docker_stats", {})
 
                 writer.writerow([
                     scenario_key,
@@ -598,6 +713,10 @@ def generate_report(campaign_results: dict, env: str) -> tuple:
                     ttd.get("ttd_seconds", "") if phase == "during_attack" else "",
                     ttd.get("detected", "") if phase == "during_attack" else "",
                     ttd.get("alert_count", "") if phase == "during_attack" else "",
+                    ds.get("broker", {}).get("cpu_pct", ""),
+                    ds.get("broker", {}).get("mem_mb", ""),
+                    ds.get("sensors", {}).get("cpu_pct_avg", ""),
+                    ds.get("sensors", {}).get("mem_mb_avg", ""),
                 ])
 
     return json_path, csv_path
@@ -832,15 +951,28 @@ def aggregate_statistics(all_runs: list, env: str) -> dict:
         sagg  = {"name": sname}
 
         for phase in ("baseline", "during_attack"):
-            lat_vals = []
-            thr_vals = []
+            lat_vals            = []
+            thr_vals            = []
+            broker_cpu_vals     = []
+            broker_mem_vals     = []
+            sensors_cpu_vals    = []
+            sensors_mem_vals    = []
             for run in all_runs:
                 snap = run["scenarios"][scenario_key].get(phase, {})
                 lat_vals.append(snap.get("latency",    {}).get("avg_ms"))
                 thr_vals.append(snap.get("throughput", {}).get("messages_per_sec"))
+                ds = snap.get("docker_stats", {})
+                broker_cpu_vals.append(ds.get("broker",  {}).get("cpu_pct"))
+                broker_mem_vals.append(ds.get("broker",  {}).get("mem_mb"))
+                sensors_cpu_vals.append(ds.get("sensors", {}).get("cpu_pct_avg"))
+                sensors_mem_vals.append(ds.get("sensors", {}).get("mem_mb_avg"))
             sagg[phase] = {
-                "latency_avg_ms":  compute_stats(lat_vals),
-                "throughput_msg_s": compute_stats(thr_vals),
+                "latency_avg_ms":    compute_stats(lat_vals),
+                "throughput_msg_s":  compute_stats(thr_vals),
+                "broker_cpu_pct":    compute_stats(broker_cpu_vals),
+                "broker_mem_mb":     compute_stats(broker_mem_vals),
+                "sensors_cpu_pct":   compute_stats(sensors_cpu_vals),
+                "sensors_mem_mb":    compute_stats(sensors_mem_vals),
             }
 
         # Anomalies (meaningful for S2 only, included for completeness)
@@ -908,6 +1040,14 @@ def generate_stats_report(agg: dict, env: str, timestamp: str) -> tuple:
             "ttd_mean", "ttd_std",
             "ttd_ci_low", "ttd_ci_high",
             "ttd_detected_count", "ttd_detection_rate",
+            "baseline_broker_cpu_mean", "baseline_broker_cpu_std",
+            "baseline_broker_mem_mean", "baseline_broker_mem_std",
+            "baseline_sensors_cpu_mean", "baseline_sensors_cpu_std",
+            "baseline_sensors_mem_mean", "baseline_sensors_mem_std",
+            "attack_broker_cpu_mean", "attack_broker_cpu_std",
+            "attack_broker_mem_mean", "attack_broker_mem_std",
+            "attack_sensors_cpu_mean", "attack_sensors_cpu_std",
+            "attack_sensors_mem_mean", "attack_sensors_mem_std",
         ])
 
         for skey, sdata in agg["scenarios"].items():
@@ -920,6 +1060,14 @@ def generate_stats_report(agg: dict, env: str, timestamp: str) -> tuple:
             atk_lat = atk.get("latency_avg_ms",  {})
             bl_thr  = bl.get("throughput_msg_s", {})
             atk_thr = atk.get("throughput_msg_s",{})
+            bl_bk_cpu  = bl.get("broker_cpu_pct",   {})
+            bl_bk_mem  = bl.get("broker_mem_mb",    {})
+            bl_sn_cpu  = bl.get("sensors_cpu_pct",  {})
+            bl_sn_mem  = bl.get("sensors_mem_mb",   {})
+            atk_bk_cpu = atk.get("broker_cpu_pct",  {})
+            atk_bk_mem = atk.get("broker_mem_mb",   {})
+            atk_sn_cpu = atk.get("sensors_cpu_pct", {})
+            atk_sn_mem = atk.get("sensors_mem_mb",  {})
 
             writer.writerow([
                 skey, agg["runs"],
@@ -933,6 +1081,14 @@ def generate_stats_report(agg: dict, env: str, timestamp: str) -> tuple:
                 ttd.get("mean"),    ttd.get("std"),
                 ttd.get("ci_95_low"), ttd.get("ci_95_high"),
                 ttd.get("detected_count"), ttd.get("detection_rate"),
+                bl_bk_cpu.get("mean"),  bl_bk_cpu.get("std"),
+                bl_bk_mem.get("mean"),  bl_bk_mem.get("std"),
+                bl_sn_cpu.get("mean"),  bl_sn_cpu.get("std"),
+                bl_sn_mem.get("mean"),  bl_sn_mem.get("std"),
+                atk_bk_cpu.get("mean"), atk_bk_cpu.get("std"),
+                atk_bk_mem.get("mean"), atk_bk_mem.get("std"),
+                atk_sn_cpu.get("mean"), atk_sn_cpu.get("std"),
+                atk_sn_mem.get("mean"), atk_sn_mem.get("std"),
             ])
 
     return json_path, csv_path
@@ -1075,7 +1231,7 @@ def _execute_campaign(env_config: dict, env: str, run_num: int, total_runs: int)
         reset_between_scenarios(env_config)
 
         log("[*] Collecting baseline metrics...")
-        scenario_results["baseline"] = collect_snapshot(env_config, "baseline")
+        scenario_results["baseline"] = collect_snapshot(env_config, "baseline", env=env)
 
         log(f"[*] Launching Scenario {scenario_num}: {scenario_name}")
         scenario_start = datetime.now(timezone.utc).isoformat()
@@ -1094,12 +1250,12 @@ def _execute_campaign(env_config: dict, env: str, run_num: int, total_runs: int)
             attack_thread.join()
             log(f"[+] Scenario {scenario_num} complete")
             scenario_results["during_attack"] = collect_snapshot(
-                env_config, "during_attack", since=scenario_start
+                env_config, "during_attack", since=scenario_start, env=env
             )
         else:
             time.sleep(5)
             scenario_results["during_attack"] = collect_snapshot(
-                env_config, "during_attack", since=scenario_start
+                env_config, "during_attack", since=scenario_start, env=env
             )
             attack_thread.join()
             log(f"[+] Scenario {scenario_num} complete")
