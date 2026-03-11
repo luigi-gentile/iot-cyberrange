@@ -149,7 +149,7 @@ iot-cyberrange/
 │   │       └── 06_replay.py
 │   ├── soc/
 │   │   ├── Dockerfile
-│   │   └── soc_bridge.py        # Suricata→InfluxDB bridge + correlation engine
+│   │   └── soc_bridge.py
 │   ├── grafana/
 │   │   └── provisioning/
 │   │       └── dashboards/
@@ -163,10 +163,10 @@ iot-cyberrange/
 │           └── eve.json
 │
 └── metrics/
-    ├── run_campaign.py          # Main campaign orchestrator
-    ├── collect_metrics.py       # Metrics snapshot collector
-    ├── suricata_ttd.py          # Time to Detection parser
-    └── results/                 # Campaign output (JSON + CSV)
+    ├── run_campaign.py
+    ├── collect_metrics.py
+    ├── suricata_ttd.py
+    └── results/
 ```
 
 ---
