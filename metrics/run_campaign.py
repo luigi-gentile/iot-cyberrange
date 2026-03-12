@@ -541,10 +541,46 @@ def collect_docker_stats(env: str) -> dict:
     return {"broker": broker, "sensors": sensors_avg}
 
 
+def _aggregate_docker_samples(samples: list) -> dict:
+    """
+    Aggregate a list of docker_stats snapshots collected by the background
+    sampler into a single representative record.
+
+    The broker's peak CPU sample is chosen as the representative value,
+    because the goal is to capture the worst-case resource impact of an
+    attack that may last only a few seconds within a longer measurement
+    window. RAM and sensor averages are taken from the same sample.
+
+    Args:
+        samples: List of dicts returned by collect_docker_stats(), collected
+                 at fixed intervals during the measurement window.
+
+    Returns:
+        A single docker_stats dict (same structure as collect_docker_stats()),
+        with an added "samples_count" key.
+    """
+    if not samples:
+        return {}
+
+    # Find the sample with the highest broker CPU (attack peak)
+    peak = max(
+        samples,
+        key=lambda s: s.get("broker", {}).get("cpu_pct") or 0.0,
+    )
+    result = dict(peak)
+    result["samples_count"] = len(samples)
+    return result
+
+
 def collect_snapshot(env_config: dict, label: str, since: str = "-2m",
                      env: str = "") -> dict:
     """
     Collect a complete metrics snapshot at a given point in time.
+
+    Docker resource stats are sampled in a background thread every 3 seconds
+    for the entire duration of the measurement window, then aggregated by peak
+    broker CPU. This captures short-lived resource spikes (e.g. DoS floods on
+    plain MQTT) that would otherwise be missed by a single end-of-window sample.
 
     Args:
         env_config: Environment configuration dict
@@ -559,24 +595,47 @@ def collect_snapshot(env_config: dict, label: str, since: str = "-2m",
     """
     log(f"[*] Collecting metrics snapshot: {label}")
 
+    # Start background docker stats sampler so we capture the peak CPU across
+    # the full measurement window rather than a single point at the end.
+    docker_samples: list = []
+    stop_sampling  = threading.Event()
+
+    def _sampler():
+        while not stop_sampling.is_set():
+            snap = collect_docker_stats(env)
+            if "error" not in snap:
+                docker_samples.append(snap)
+            stop_sampling.wait(timeout=3)
+
+    if env:
+        sampler_thread = threading.Thread(target=_sampler, daemon=True)
+        sampler_thread.start()
+
     snapshot = {
-        "label":        label,
-        "timestamp":    datetime.now(timezone.utc).isoformat(),
-        "latency":      measure_latency(env_config),
-        "throughput":   measure_throughput(env_config),
-        "services":     measure_services(env_config),
-        "integrity":    check_data_integrity(env_config, since=since),
-        "docker_stats": collect_docker_stats(env) if env else {},
+        "label":     label,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "latency":   measure_latency(env_config),
+        "throughput": measure_throughput(env_config),
+        "services":  measure_services(env_config),
+        "integrity": check_data_integrity(env_config, since=since),
     }
+
+    # Stop sampler and aggregate
+    stop_sampling.set()
+    if env:
+        sampler_thread.join(timeout=5)
+
+    snapshot["docker_stats"] = _aggregate_docker_samples(docker_samples) if env else {}
 
     ds = snapshot["docker_stats"]
     broker_cpu = ds.get("broker", {}).get("cpu_pct", "N/A")
     broker_mem = ds.get("broker", {}).get("mem_mb", "N/A")
+    n_samples  = ds.get("samples_count", 0)
     log(
         f"[+] Snapshot '{label}' — "
         f"latency: {snapshot['latency'].get('avg_ms', 'N/A')}ms | "
         f"throughput: {snapshot['throughput'].get('messages_per_sec', 'N/A')} msg/s | "
-        f"broker CPU: {broker_cpu}% MEM: {broker_mem}MB"
+        f"broker CPU peak: {broker_cpu}% MEM: {broker_mem}MB (n={n_samples})"
     )
 
     return snapshot
