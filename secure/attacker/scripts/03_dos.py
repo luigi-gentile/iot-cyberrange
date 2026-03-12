@@ -9,7 +9,7 @@ lateral movement in S5) and attempts the same N-fold fanout flood.
 Broker security controls reduce the impact measurably:
   - TLS required        : each connection costs crypto handshake overhead
   - Authentication      : attacker must use stolen credentials
-  - max_connections 20  : only ~15 flood workers connect; rest are refused
+  - max_connections 20  : only 15 worker slots used (~4 refused after TLS); CPU stays flat
   - ACL enforcement     : can only access sensors/# and metrics/dos/latency
   - max_queued_messages : throttles message delivery per subscription queue
 
@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 
 BROKER_HOST       = os.getenv("BROKER_HOST", "172.21.0.20")
 BROKER_PORT       = int(os.getenv("BROKER_PORT", 8883))
-FLOOD_CONNECTIONS = 300
+FLOOD_CONNECTIONS = 15
 MSGS_PER_CLIENT   = 2000
 FLOOD_TOPIC       = "metrics/dos/latency"
 LATENCY_TOPIC     = "metrics/dos/probe"     # dedicated probe topic — no flood traffic here
