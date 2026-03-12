@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 
 BROKER_HOST       = os.getenv("BROKER_HOST", "172.21.0.20")
 BROKER_PORT       = int(os.getenv("BROKER_PORT", 8883))
-FLOOD_CONNECTIONS = 50
+FLOOD_CONNECTIONS = 150
 MSGS_PER_CLIENT   = 2000
 FLOOD_TOPIC       = "metrics/dos/latency"
 LATENCY_TOPIC     = "metrics/dos/probe"     # dedicated probe topic — no flood traffic here

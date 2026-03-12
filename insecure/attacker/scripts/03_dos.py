@@ -6,8 +6,8 @@ Subscription amplification attack:
   1. All FLOOD_CONNECTIONS workers connect and subscribe to '#'.
   2. Once all subscriptions are active, every worker starts publishing.
   3. The broker must route each published message to ALL N subscribers,
-     creating an N-fold fanout: 50 workers × 2000 msgs = 100 K publishes,
-     each triggering 50 deliveries → 5 M routing operations total.
+     creating an N-fold fanout: 150 workers × 2000 msgs = 300 K publishes,
+     each triggering 150 deliveries → 45 M routing operations total.
 
 Without authentication or rate limiting the broker has no defence.
 MITRE ATT&CK ICS: T0814 Denial of Service
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 
 BROKER_HOST       = os.getenv("BROKER_HOST", "172.20.0.20")
 BROKER_PORT       = int(os.getenv("BROKER_PORT", 1883))
-FLOOD_CONNECTIONS = 50
+FLOOD_CONNECTIONS = 150
 MSGS_PER_CLIENT   = 2000
 FLOOD_TOPIC       = "attack/dos/flood"
 LATENCY_TOPIC     = "metrics/dos/latency"
