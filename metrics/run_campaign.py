@@ -1220,7 +1220,8 @@ def print_stats_summary(agg: dict):
 
     print("")
 
-def _execute_campaign(env_config: dict, env: str, run_num: int, total_runs: int) -> dict:
+def _execute_campaign(env_config: dict, env: str, run_num: int, total_runs: int,
+                      only_scenario: int = None) -> dict:
     """
     Execute one full campaign (all 5 scenarios) and return the results dict.
     InfluxDB data is cleared at the start of every run to ensure independence.
@@ -1274,6 +1275,8 @@ def _execute_campaign(env_config: dict, env: str, run_num: int, total_runs: int)
 
     # ── Run each scenario ──────────────────────────────────
     for scenario_num in range(1, 7):
+        if only_scenario is not None and scenario_num != only_scenario:
+            continue
         scenario_name = SCENARIO_NAMES[scenario_num]
         scenario_key  = f"scenario_{scenario_num}"
 
@@ -1345,6 +1348,14 @@ def main():
         metavar="N",
         help="Number of independent campaign runs for statistical analysis (default: 1)"
     )
+    parser.add_argument(
+        "--scenario",
+        type=int,
+        choices=range(1, 7),
+        default=None,
+        metavar="N",
+        help="Run only scenario N (1-6). Omit to run all scenarios."
+    )
 
     args       = parser.parse_args()
     env_config = ENVIRONMENTS[args.env]
@@ -1360,7 +1371,8 @@ def main():
 
     # ── Single run: original behaviour ────────────────────
     if args.runs == 1:
-        campaign_results = _execute_campaign(env_config, args.env, 1, 1)
+        campaign_results = _execute_campaign(env_config, args.env, 1, 1,
+                                              only_scenario=args.scenario)
 
         separator("GENERATING REPORT")
         json_path, csv_path = generate_report(campaign_results, args.env)
@@ -1376,7 +1388,8 @@ def main():
     all_runs = []
     for run_num in range(1, args.runs + 1):
         separator(f"STARTING RUN {run_num}/{args.runs}")
-        result = _execute_campaign(env_config, args.env, run_num, args.runs)
+        result = _execute_campaign(env_config, args.env, run_num, args.runs,
+                                   only_scenario=args.scenario)
         all_runs.append(result)
 
         # Save individual run result
