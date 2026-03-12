@@ -44,6 +44,10 @@ services:
         ipv4_address: 172.21.0.20
       data_pipeline:
         ipv4_address: 172.22.0.20
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
     restart: unless-stopped
 
   sensor_temp:

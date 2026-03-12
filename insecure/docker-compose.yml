@@ -38,6 +38,10 @@ services:
     networks:
       iot_flat:
         ipv4_address: 172.20.0.20
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
     restart: unless-stopped
 
   # ────────────────────────────────────────────
