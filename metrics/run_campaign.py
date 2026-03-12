@@ -605,7 +605,7 @@ def collect_snapshot(env_config: dict, label: str, since: str = "-2m",
             snap = collect_docker_stats(env)
             if "error" not in snap:
                 docker_samples.append(snap)
-            stop_sampling.wait(timeout=3)
+            stop_sampling.wait(timeout=0)
 
     if env:
         sampler_thread = threading.Thread(target=_sampler, daemon=True)

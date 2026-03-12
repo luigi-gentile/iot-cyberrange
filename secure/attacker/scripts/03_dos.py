@@ -179,8 +179,8 @@ def main():
     t_mon.start()
 
     # Baseline
-    log("[*] Collecting baseline latency (10s)...")
-    time.sleep(10)
+    log("[*] Collecting baseline latency (3s)...")
+    time.sleep(3)
     bs = stats("baseline")
     log(f"[+] Baseline: avg={bs['avg']}ms  max={bs['max']}ms  samples={bs['count']}\n")
 
